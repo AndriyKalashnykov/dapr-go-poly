@@ -6,8 +6,8 @@ test:
 	@cd ./onboarding; go test ./...
 
 build:
-	@go build -o ./basket-service/main ./basket-service/main.go
-	@go build -o ./onboarding/main ./onboarding/main.go
+	@cd basket-service && go mod download && go build -o main main.go
+	@cd basket-service && go mod download && go build -o main main.go
 	@cd order-service && dotnet build order-service.csproj && cd ..
 	@cd product-service && dotnet build product-service.csproj && cd ..
 

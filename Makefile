@@ -18,10 +18,10 @@ update:
 	@cd product-service && dotnet list package --outdated | grep -o '> \S*' | grep '[^> ]*' -o | xargs --no-run-if-empty -L 1 dotnet add package
 
 dapr-run:
-	@cd order-service && dapr run --app-id product-service --app-port 8080 --placement-host-address host.docker.internal:50006 --dapr-http-port 3500
+	@cd order-service && dapr run --config ../.dapr/config.yaml --app-id product-service --app-port 8080 --placement-host-address host.docker.internal:50006 --dapr-http-port 3500
 
 compose-up:
-	docker compose up
+	docker compose up --build
 
 compose-down:
 	docker compose down

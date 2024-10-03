@@ -9,8 +9,7 @@ services:
       POSTGRES_PASSWORD: test
       POSTGRES_DB: product
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data # Create in current directory
-      #- postgres_data:/var/lib/postgresql/data # Create in volume
+      - ./.postgres_data:/var/lib/postgresql/data # Create in current directory
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d product -U postgres"]
       interval: 1s
@@ -24,7 +23,7 @@ services:
       context: ./product-service
       dockerfile: Dockerfile
     ports:
-      - 1000:8080
+      - "1000:8080"
       - "50001:50001"
     restart: on-failure
     environment:
@@ -42,53 +41,55 @@ services:
     command:
       [
         "./daprd",
-        "-app-id",
-        "product-service",
-        "-app-port",
-        "8080",
-        "-placement-host-address",
-        "host.docker.internal:50006",
+        "-app-id", "product-service",
+        "-app-port","8080",
+        "-placement-host-address", "host.docker.internal:50006",
+        "-config", "/configuration/config.yaml"
       ]
+    volumes:
+      - "./.dapr/:/configuration"
+      # - "./.dapr/components/:/components"
     depends_on:
       product-service:
         condition: service_started
     network_mode: "service:product-service"
 
-  order-service:
-    image: order-service
-    build:
-      context: ./order-service
-      dockerfile: Dockerfile
-    ports:
-      - 1001:8080
-      - "50002:50002"
-    restart: on-failure
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DATABASE: product
-      POSTGRES_USERNAME: postgres
-      POSTGRES_PASSWORD: test
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  order-service-dapr:
-    image: "daprio/daprd"
-    command:
-      [
-        "./daprd",
-        "-app-id",
-        "order-service",
-        "-app-port",
-        "8080",
-        "-placement-host-address",
-        "host.docker.internal:50006",
-      ]
-    depends_on:
-      product-service:
-        condition: service_started
-    network_mode: "service:order-service"
+#  order-service:
+#    image: order-service
+#    build:
+#      context: ./order-service
+#      dockerfile: Dockerfile
+#    ports:
+#      - "1001:8080"
+#      - "50002:50002"
+#    restart: on-failure
+#    environment:
+#      POSTGRES_HOST: postgres
+#      POSTGRES_PORT: 5432
+#      POSTGRES_DATABASE: product
+#      POSTGRES_USERNAME: postgres
+#      POSTGRES_PASSWORD: test
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#
+#  order-service-dapr:
+#    image: "daprio/daprd"
+#    command:
+#      [
+#        "./daprd",
+#        "-app-id","order-service",
+#        "-app-port","8080",
+#        "-placement-host-address","host.docker.internal:50006",
+#        "-config", "/configuration/config.yaml"
+#      ]
+#    volumes:
+#      - "./.dapr/:/configuration"
+#      # - "./.dapr/components/:/components"
+#    depends_on:
+#      product-service:
+#        condition: service_started
+#    network_mode: "service:order-service"
 
   # redis:
   #   image: redis

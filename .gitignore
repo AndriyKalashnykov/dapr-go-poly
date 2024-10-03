@@ -26,7 +26,7 @@ vendor
 *.idea/
 *dist/
 
-*postgres_data/
+*.postgres_data/
 *bin/
 *obj/
 *main

@@ -9,12 +9,12 @@ spec:
     samplingRate: "1"
     zipkin:
       endpointAddress: http://localhost:9411/api/v2/spans
-  mtls:
-    allowedClockSkew: 15m
-    enabled: false
-    workloadCertTTL: 24h
-  features:
-    - name: PubSub.Routing
-      enabled: true
-    - name: proxy.grpc
-      enabled: true
+#  mtls:
+#    allowedClockSkew: 15m
+#    enabled: false
+#    workloadCertTTL: 24h
+#  features:
+#    - name: PubSub.Routing
+#      enabled: true
+#    - name: proxy.grpc
+#      enabled: true

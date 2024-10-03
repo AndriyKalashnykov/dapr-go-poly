@@ -20,8 +20,9 @@ update:
 dapr-run:
 	@cd order-service && dapr run --config ../.dapr/config.yaml --app-id product-service --app-port 8080 --placement-host-address host.docker.internal:50006 --dapr-http-port 3500
 
-compose-up:
+cd:
+	docker compose down --remove-orphans --volumes
+
+cu: cd
 	docker compose up --build
 
-compose-down:
-	docker compose down

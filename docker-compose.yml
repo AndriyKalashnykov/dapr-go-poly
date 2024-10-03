@@ -1,5 +1,52 @@
 services:
 
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    restart: on-failure
+
+  placement:
+    image: "ghcr.io/dapr/dapr"
+    command: ["./placement", "--port", "50006"]
+    ports:
+      - "50006:50006"
+
+  scheduler:
+    image: "ghcr.io/dapr/dapr:edge"
+    command: ["./scheduler", "--port", "50007"]
+    ports:
+      - "50007:50007"
+    # WARNING - This is a tmpfs volume, your state will not be persisted across restarts
+    volumes:
+      - type: tmpfs
+        target: /data
+        tmpfs:
+          size: 10000
+    depends_on:
+      placement:
+        condition: service_started
+
+  dapr-dashboard:
+    image: "ghcr.io/dapr/dashboard"
+    command: [ "--docker-compose=true",
+               "--components-path=/home/nonroot/components",
+               "--config-path=/home/nonroot/configuration",
+               "--docker-compose-path=/home/nonroot/docker-compose.yml" ]
+    ports:
+      - "9090:8080"
+    volumes:
+      - "./.iac/dapr/local/components/:/home/nonroot/components"
+      - "./.iac/dapr/local/:/home/nonroot/configuration"
+      - "./docker-compose.yml:/home/nonroot/docker-compose.yml"
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: tracing_zipkin
+    restart: always
+    ports:
+      - "9411:9411"
+
   postgres:
     image: postgres:17
     ports:
@@ -24,7 +71,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "1000:8080"
-      - "50001:50001"
+      - "50008:50008"
     restart: on-failure
     environment:
       POSTGRES_HOST: postgres
@@ -33,6 +80,10 @@ services:
       POSTGRES_USERNAME: postgres
       POSTGRES_PASSWORD: test
     depends_on:
+      placement:
+        condition: service_started
+      scheduler:
+        condition: service_started
       postgres:
         condition: service_healthy
 
@@ -44,58 +95,55 @@ services:
         "-app-id", "product-service",
         "-app-port","8080",
         "-placement-host-address", "host.docker.internal:50006",
-        "-config", "/configuration/config.yaml"
+        "-config", "/configuration/config.yaml",
+        "-log-level", "debug"
       ]
     volumes:
-      - "./.dapr/:/configuration"
-      # - "./.dapr/components/:/components"
+      - "./.iac/dapr/local/:/configuration"
+      # - "./.iac/dapr/local/components/:/components"
     depends_on:
       product-service:
         condition: service_started
     network_mode: "service:product-service"
 
-#  order-service:
-#    image: order-service
-#    build:
-#      context: ./order-service
-#      dockerfile: Dockerfile
-#    ports:
-#      - "1001:8080"
-#      - "50002:50002"
-#    restart: on-failure
-#    environment:
-#      POSTGRES_HOST: postgres
-#      POSTGRES_PORT: 5432
-#      POSTGRES_DATABASE: product
-#      POSTGRES_USERNAME: postgres
-#      POSTGRES_PASSWORD: test
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#
-#  order-service-dapr:
-#    image: "daprio/daprd"
-#    command:
-#      [
-#        "./daprd",
-#        "-app-id","order-service",
-#        "-app-port","8080",
-#        "-placement-host-address","host.docker.internal:50006",
-#        "-config", "/configuration/config.yaml"
-#      ]
-#    volumes:
-#      - "./.dapr/:/configuration"
-#      # - "./.dapr/components/:/components"
-#    depends_on:
-#      product-service:
-#        condition: service_started
-#    network_mode: "service:order-service"
+  order-service:
+    image: order-service
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    ports:
+      - "1001:8080"
+      - "50009:50009"
+    restart: on-failure
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: product
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: test
+    depends_on:
+      postgres:
+        condition: service_healthy
 
-  # redis:
-  #   image: redis
-  #   ports:
-  #     - 6379:6379
-  #   restart: on-failure
+  order-service-dapr:
+    image: "daprio/daprd"
+    command:
+      [
+        "./daprd",
+        "-app-id","order-service",
+        "-app-port","8080",
+        "-placement-host-address","host.docker.internal:50006",
+        "-config", "/configuration/config.yaml",
+        "-log-level", "debug"
+      ]
+    volumes:
+      - "./.iac/dapr/local/:/configuration"
+      # - "./.iac/dapr/local/components/:/components"
+    depends_on:
+      product-service:
+        condition: service_started
+    network_mode: "service:order-service"
+
 
   # rabbitmq:
   #   image: rabbitmq:3-management-alpine
@@ -106,3 +154,28 @@ services:
   #     - 5672:5672
   #     - 15672:15672
   #   restart: on-failure
+
+#  otel-collector:
+#    image: otel/opentelemetry-collector:latest
+#    command: ["--config=/etc/otel-collector-config.yaml"]
+#    volumes:
+#      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+#      - ./output:/etc/output:rw # Store the logs
+#    ports:
+#      - "4317:4317"
+#      - "8888:8888"   # Prometheus metrics exposed by the collector
+#      - "8889:8889"   # Prometheus exporter metrics
+#    depends_on:
+#      - jaeger
+#  jaeger:
+#    container_name: jaeger
+#    image: jaegertracing/all-in-one
+#    ports:
+#      - "16686:16686"
+#      - "14250"
+#
+#  prometheus:
+#    container_name: prometheus
+#    image: prom/prometheus:latest
+#    ports:
+#      - "9090:9090"

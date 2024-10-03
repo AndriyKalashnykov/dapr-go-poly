@@ -8,8 +8,14 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: test
       POSTGRES_DB: product
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data # Create in current directory
+      #- postgres_data:/var/lib/postgresql/data # Create in volume
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready" ]
+      test: ["CMD-SHELL", "pg_isready -d product -U postgres"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
     restart: on-failure
 
   product-service:

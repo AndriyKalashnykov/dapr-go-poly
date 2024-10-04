@@ -1,148 +1,162 @@
 services:
 
-  redis:
-    image: redis:latest
-    ports:
-      - "6379:6379"
-    restart: on-failure
+#  redis:
+#    image: redis:latest
+#    ports:
+#      - "6379:6379"
+#    restart: on-failure
 
   placement:
-    image: "ghcr.io/dapr/dapr"
-    command: ["./placement", "--port", "50006"]
+    # https://github.com/dapr/dapr/pkgs/container/daprd/versions?filters%5Bversion_type%5D=tagged
+    image: "ghcr.io/dapr/dapr:1.14.4"
+    command: [
+      "./placement",
+      "--port", "50006"
+    ]
     ports:
       - "50006:50006"
 
   scheduler:
-    image: "ghcr.io/dapr/dapr:edge"
-    command: ["./scheduler", "--port", "50007"]
+    privileged: true
+    image: "ghcr.io/dapr/dapr:1.14.4"
+    command: [
+      "./scheduler",
+      "--port", "50007",
+      "--id","scheduler-0",
+      "--replica-count", "1",
+      "--etcd-data-dir", "/var/run/dapr/scheduler",
+      "--etcd-client-ports", "scheduler-0=2379",
+      "--etcd-client-http-ports", "scheduler-0=2330",
+      "--initial-cluster", "scheduler-0=http://scheduler-0:2380",
+    ]
     ports:
       - "50007:50007"
-    # WARNING - This is a tmpfs volume, your state will not be persisted across restarts
     volumes:
-      - type: tmpfs
-        target: /data
-        tmpfs:
-          size: 10000
-    depends_on:
-      placement:
-        condition: service_started
+      - ./.dapr_scheduler/0:/var/run/dapr/scheduler:rw
+#      - type: tmpfs # WARNING - This is a tmpfs volume, your state will not be persisted across restarts
+#        target: /var/run/dapr/scheduler
+#        tmpfs:
+#          size: 10000
+#    depends_on:
+#      placement:
+#        condition: service_started
 
-  dapr-dashboard:
-    image: "ghcr.io/dapr/dashboard"
-    command: [ "--docker-compose=true",
-               "--components-path=/home/nonroot/components",
-               "--config-path=/home/nonroot/configuration",
-               "--docker-compose-path=/home/nonroot/docker-compose.yml" ]
-    ports:
-      - "9090:8080"
-    volumes:
-      - "./.iac/dapr/local/components/:/home/nonroot/components"
-      - "./.iac/dapr/local/:/home/nonroot/configuration"
-      - "./docker-compose.yml:/home/nonroot/docker-compose.yml"
+#  dapr-dashboard:
+#    image: "ghcr.io/dapr/dashboard"
+#    command: [ "--docker-compose=true",
+#               "--components-path=/home/nonroot/components",
+#               "--config-path=/home/nonroot/configuration",
+#               "--docker-compose-path=/home/nonroot/docker-compose.yml" ]
+#    ports:
+#      - "9090:8080"
+#    volumes:
+#      - "./.iac/dapr/local/components/:/home/nonroot/components"
+#      - "./.iac/dapr/local/:/home/nonroot/configuration"
+#      - "./docker-compose.yml:/home/nonroot/docker-compose.yml"
 
-  zipkin:
-    image: openzipkin/zipkin
-    container_name: tracing_zipkin
-    restart: always
-    ports:
-      - "9411:9411"
+#  zipkin:
+#    image: openzipkin/zipkin
+#    container_name: tracing_zipkin
+#    restart: always
+#    ports:
+#      - "9411:9411"
 
-  postgres:
-    image: postgres:17
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: test
-      POSTGRES_DB: product
-    volumes:
-      - ./.postgres_data:/var/lib/postgresql/data # Create in current directory
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d product -U postgres"]
-      interval: 1s
-      timeout: 5s
-      retries: 10
-    restart: on-failure
-
-  product-service:
-    image: product-service
-    build:
-      context: ./product-service
-      dockerfile: Dockerfile
-    ports:
-      - "1000:8080"
-      - "50008:50008"
-    restart: on-failure
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DATABASE: product
-      POSTGRES_USERNAME: postgres
-      POSTGRES_PASSWORD: test
-    depends_on:
-      placement:
-        condition: service_started
-      scheduler:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-
-  product-service-dapr:
-    image: "daprio/daprd"
-    command:
-      [
-        "./daprd",
-        "-app-id", "product-service",
-        "-app-port","8080",
-        "-placement-host-address", "host.docker.internal:50006",
-        "-config", "/configuration/config.yaml",
-        "-log-level", "debug"
-      ]
-    volumes:
-      - "./.iac/dapr/local/:/configuration"
-      # - "./.iac/dapr/local/components/:/components"
-    depends_on:
-      product-service:
-        condition: service_started
-    network_mode: "service:product-service"
-
-  order-service:
-    image: order-service
-    build:
-      context: ./order-service
-      dockerfile: Dockerfile
-    ports:
-      - "1001:8080"
-      - "50009:50009"
-    restart: on-failure
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DATABASE: product
-      POSTGRES_USERNAME: postgres
-      POSTGRES_PASSWORD: test
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  order-service-dapr:
-    image: "daprio/daprd"
-    command:
-      [
-        "./daprd",
-        "-app-id","order-service",
-        "-app-port","8080",
-        "-placement-host-address","host.docker.internal:50006",
-        "-config", "/configuration/config.yaml",
-        "-log-level", "debug"
-      ]
-    volumes:
-      - "./.iac/dapr/local/:/configuration"
-      # - "./.iac/dapr/local/components/:/components"
-    depends_on:
-      product-service:
-        condition: service_started
-    network_mode: "service:order-service"
+#  postgres:
+#    image: postgres:17
+#    ports:
+#      - "5432:5432"
+#    environment:
+#      POSTGRES_USER: postgres
+#      POSTGRES_PASSWORD: test
+#      POSTGRES_DB: product
+#    volumes:
+#      - ./.postgres_data:/var/lib/postgresql/data # Create in current directory
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -d product -U postgres"]
+#      interval: 1s
+#      timeout: 5s
+#      retries: 10
+#    restart: on-failure
+#
+#  product-service:
+#    image: product-service
+#    build:
+#      context: ./product-service
+#      dockerfile: Dockerfile
+#    ports:
+#      - "1000:8080"
+#      - "50008:50008"
+#    restart: on-failure
+#    environment:
+#      POSTGRES_HOST: postgres
+#      POSTGRES_PORT: 5432
+#      POSTGRES_DATABASE: product
+#      POSTGRES_USERNAME: postgres
+#      POSTGRES_PASSWORD: test
+#    depends_on:
+#      placement:
+#        condition: service_started
+#      scheduler:
+#        condition: service_started
+#      postgres:
+#        condition: service_healthy
+#
+#  product-service-dapr:
+#    image: "daprio/daprd"
+#    command:
+#      [
+#        "./daprd",
+#        "-app-id", "product-service",
+#        "-app-port","8080",
+#        "-placement-host-address", "host.docker.internal:50006",
+#        "-config", "/configuration/config.yaml",
+#        "-log-level", "debug"
+#      ]
+#    volumes:
+#      - "./.iac/dapr/local/:/configuration"
+#      # - "./.iac/dapr/local/components/:/components"
+#    depends_on:
+#      product-service:
+#        condition: service_started
+#    network_mode: "service:product-service"
+#
+#  order-service:
+#    image: order-service
+#    build:
+#      context: ./order-service
+#      dockerfile: Dockerfile
+#    ports:
+#      - "1001:8080"
+#      - "50009:50009"
+#    restart: on-failure
+#    environment:
+#      POSTGRES_HOST: postgres
+#      POSTGRES_PORT: 5432
+#      POSTGRES_DATABASE: product
+#      POSTGRES_USERNAME: postgres
+#      POSTGRES_PASSWORD: test
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#
+#  order-service-dapr:
+#    image: "daprio/daprd"
+#    command:
+#      [
+#        "./daprd",
+#        "-app-id","order-service",
+#        "-app-port","8080",
+#        "-placement-host-address","host.docker.internal:50006",
+#        "-config", "/configuration/config.yaml",
+#        "-log-level", "debug"
+#      ]
+#    volumes:
+#      - "./.iac/dapr/local/:/configuration"
+#      # - "./.iac/dapr/local/components/:/components"
+#    depends_on:
+#      product-service:
+#        condition: service_started
+#    network_mode: "service:order-service"
 
 
   # rabbitmq:

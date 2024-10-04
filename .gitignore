@@ -30,4 +30,5 @@ vendor
 *bin/
 *obj/
 *main
+*.dapr_scheduler/
 

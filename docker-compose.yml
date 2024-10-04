@@ -19,6 +19,7 @@ services:
 
   scheduler:
     privileged: true
+    user: "1000"
     image: "daprio/dapr:1.14.4"
     command: [
       "./scheduler",
@@ -34,10 +35,8 @@ services:
       - "50007:50007"
     volumes:
       - ./.dapr_scheduler/0:/var/run/dapr/scheduler:rw
-      # - type: tmpfs # WARNING - This is a tmpfs volume, your state will not be persisted across restarts
-      #   target: /var/run/dapr/scheduler
-      #   tmpfs:
-      #     size: 10000
+#      - type: tmpfs # WARNING - This is a tmpfs volume, your state will not be persisted across restarts
+#        target: /var/run/dapr/scheduler
     depends_on:
       placement:
         condition: service_started

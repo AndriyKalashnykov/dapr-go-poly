@@ -8,7 +8,8 @@ services:
 
   placement:
     # https://github.com/dapr/dapr/pkgs/container/daprd/versions?filters%5Bversion_type%5D=tagged
-    image: "ghcr.io/dapr/dapr:1.14.4"
+    # daprio uses http by default, whyle ghcr.io uses https, can be helpful in environments with "man in the middle" Netscope etc.
+    image: "daprio/dapr:1.14.4"
     command: [
       "./placement",
       "--port", "50006"
@@ -18,7 +19,7 @@ services:
 
   scheduler:
     privileged: true
-    image: "ghcr.io/dapr/dapr:1.14.4"
+    image: "daprio/dapr:1.14.4"
     command: [
       "./scheduler",
       "--port", "50007",
@@ -33,13 +34,13 @@ services:
       - "50007:50007"
     volumes:
       - ./.dapr_scheduler/0:/var/run/dapr/scheduler:rw
-#      - type: tmpfs # WARNING - This is a tmpfs volume, your state will not be persisted across restarts
-#        target: /var/run/dapr/scheduler
-#        tmpfs:
-#          size: 10000
-#    depends_on:
-#      placement:
-#        condition: service_started
+      # - type: tmpfs # WARNING - This is a tmpfs volume, your state will not be persisted across restarts
+      #   target: /var/run/dapr/scheduler
+      #   tmpfs:
+      #     size: 10000
+    depends_on:
+      placement:
+        condition: service_started
 
 #  dapr-dashboard:
 #    image: "ghcr.io/dapr/dashboard"

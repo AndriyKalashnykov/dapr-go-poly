@@ -33,7 +33,7 @@ jobs:
             ${{ matrix.dotnet-version }}
 
       - name: Build
-        run: make build
+        run: make build image-build
 
   tests:
     strategy:

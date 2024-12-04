@@ -17,6 +17,10 @@ update:
 	@cd order-service && dotnet list package --outdated | grep -o '> \S*' | grep '[^> ]*' -o | xargs --no-run-if-empty -L 1 dotnet add package
 	@cd product-service && dotnet list package --outdated | grep -o '> \S*' | grep '[^> ]*' -o | xargs --no-run-if-empty -L 1 dotnet add package
 
+image-build:
+	@cd order-service && docker buildx build --load -t andriykalashnykov/dapr-go-poly-order-service:latest .
+	@cd order-service && docker buildx build --load -t andriykalashnykov/dapr-go-poly-product-service:latest .
+	
 dapr-run:
 	@cd order-service && dapr run --config ../.dapr/config.yaml --app-id product-service --app-port 8080 --placement-host-address host.docker.internal:50006 --dapr-http-port 3500
 

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:9.0.101 AS build
 WORKDIR /dapr
 
 # Copy everything
@@ -9,7 +9,7 @@ RUN dotnet restore
 RUN dotnet publish -c Release -o out
 
 # Build runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
+FROM mcr.microsoft.com/dotnet/runtime:8.0.11-cbl-mariner2.0
 WORKDIR /dapr
-COPY --from=build-env /dapr/out .
+COPY --from=build /dapr/out .
 ENTRYPOINT ["dotnet", "product-service.dll"]

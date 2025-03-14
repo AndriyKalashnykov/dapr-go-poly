@@ -2,6 +2,8 @@ using System.Text.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
+// https://www.rabbitmq.com/tutorials/tutorial-one-dotnet
+
 public class OrdersConsumer : BackgroundService
 {
     private readonly ILogger<OrdersConsumer> _logger;
@@ -37,20 +39,20 @@ public class OrdersConsumer : BackgroundService
 
         try
         {
-            var connection = factory.CreateConnection();
-            var channel = connection.CreateModel();
+            using var connection = await factory.CreateConnectionAsync();
+            using var channel = await connection.CreateChannelAsync();
 
-            var c = channel.QueueDeclare(queue: queueName,
+            var c = await channel.QueueDeclareAsync(queue: queueName,
                                     durable: true,
                                     exclusive: false,
                                     autoDelete: false,
                                     arguments: null);
 
-            var consumer = new EventingBasicConsumer(channel);
+            var consumer = new AsyncEventingBasicConsumer(channel);
 
             _logger.LogInformation("READY TO RECEIVE");
 
-            consumer.Received += async (model, ea) =>
+            consumer.ReceivedAsync += async (model, ea) =>
             {
                 _logger.LogInformation("RECEIVED");
 
@@ -74,7 +76,7 @@ public class OrdersConsumer : BackgroundService
                 }
             };
 
-            channel.BasicConsume(queue: c.QueueName,
+            await channel.BasicConsumeAsync(queue: c.QueueName,
                 autoAck: true,
                 consumer: consumer);
 

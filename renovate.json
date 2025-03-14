@@ -61,7 +61,7 @@
   ],
   "force": {
     "constraints": {
-      "go": "1.23"
+      "go": "< 2"
     }
   },
   "platformAutomerge": true,

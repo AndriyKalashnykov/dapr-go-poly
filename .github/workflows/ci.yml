@@ -10,10 +10,6 @@ jobs:
 
     timeout-minutes: 20
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: [ 1.23 ]
-        dotnet-version: [ 9.0 ]
 
     steps:
       - name: Checkout
@@ -24,13 +20,13 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: basket-service/go.mod
           cache: true
+          
       - name: Install .DotNet
         uses: actions/setup-dotnet@3951f0dfe7a07e2313ec93c75700083e2005cbab # v4
         with:
-          dotnet-version: |
-            ${{ matrix.dotnet-version }}
+          global-json-file: global.json
 
       - name: Build
         run: make build image-build
@@ -39,7 +35,6 @@ jobs:
     strategy:
       matrix:
         name: [unit]
-        go-version: [ 1.23 ]
     runs-on: ubuntu-latest
     name: test (${{ matrix.name }})
     steps:
@@ -51,7 +46,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: basket-service/go.mod
           cache: true
 
       - name: Run ${{ matrix.name }} tests

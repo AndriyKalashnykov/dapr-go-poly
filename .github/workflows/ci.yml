@@ -27,9 +27,13 @@ jobs:
         uses: actions/setup-dotnet@3951f0dfe7a07e2313ec93c75700083e2005cbab # v4
         with:
           global-json-file: global.json
-
+          cache: true
+          
       - name: Build
-        run: make build image-build
+        run: make build
+        
+      - name: Image Build
+        run: make image-build
 
   tests:
     strategy:

@@ -1,6 +1,6 @@
 module github.com/AndriyKalashnykov/dapr-go-poly/onboarding
 
-go 1.24
+go 1.25.1
 
 require github.com/dapr/go-sdk v1.12.0
 

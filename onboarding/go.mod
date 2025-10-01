@@ -2,7 +2,7 @@ module github.com/AndriyKalashnykov/dapr-go-poly/onboarding
 
 go 1.25.1
 
-require github.com/dapr/go-sdk v1.12.0
+require github.com/dapr/go-sdk v1.13.0
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect

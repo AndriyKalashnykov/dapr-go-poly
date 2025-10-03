@@ -15,12 +15,14 @@ import (
 )
 
 type Server struct {
-	client client.Client
+	client   client.Client
+	wfClient *workflow.Client
 }
 
-func NewServer(client client.Client) *Server {
+func NewServer(client client.Client, wfClient *workflow.Client) *Server {
 	return &Server{
-		client: client,
+		client:   client,
+		wfClient: wfClient,
 	}
 }
 
@@ -57,7 +59,12 @@ func main() {
 		log.Fatalf("failed to intialise client: %v", err)
 	}
 
-	s := NewServer(c)
+	wfClient, err := workflow.NewClient()
+	if err != nil {
+		log.Fatalf("failed to initialise workflow client: %v", err)
+	}
+
+	s := NewServer(c, wfClient)
 
 	http.HandleFunc("POST /onboarding", s.handleCreateOnboarding)
 	http.HandleFunc("POST /onboardings/{id}/approve", s.ApproveOnboarding)
@@ -76,11 +83,7 @@ func (s *Server) ApproveOnboarding(w http.ResponseWriter, r *http.Request) {
 		Approved: true,
 	}
 
-	if err := s.client.RaiseEventWorkflowBeta1(context.Background(), &client.RaiseEventWorkflowRequest{
-		InstanceID: runId,
-		EventName:  "onboarding-approval",
-		EventData:  req,
-	}); err != nil {
+	if err := s.wfClient.RaiseEvent(context.Background(), runId, "onboarding-approval", workflow.WithEventPayload(req)); err != nil {
 		json.NewEncoder(w).Encode(err.Error())
 		return
 	}
@@ -95,11 +98,7 @@ func (s *Server) DenyOnboarding(w http.ResponseWriter, r *http.Request) {
 		Approved: false,
 	}
 
-	if err := s.client.RaiseEventWorkflowBeta1(context.Background(), &client.RaiseEventWorkflowRequest{
-		InstanceID: runId,
-		EventName:  "onboarding-approval",
-		EventData:  req,
-	}); err != nil {
+	if err := s.wfClient.RaiseEvent(context.Background(), runId, "onboarding-approval", workflow.WithEventPayload(req)); err != nil {
 		json.NewEncoder(w).Encode(err.Error())
 		return
 	}
@@ -117,31 +116,24 @@ func (s *Server) handleCreateOnboarding(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	wfClient, err := workflow.NewClient(workflow.WithDaprClient(s.client))
-	if err != nil {
-		log.Fatalf("failed to initialise workflow client: %v", err)
-	}
-
-	options := &client.StartWorkflowRequest{
-		WorkflowName: "OnboardingWorkflow",
-		Options:      nil,
-		Input:        request,
-		SendRawInput: false,
-	}
-
-	we, err := s.client.StartWorkflowBeta1(context.Background(), options)
+	id, err := s.wfClient.ScheduleNewWorkflow(context.Background(), "OnboardingWorkflow", workflow.WithInput(request))
 	if err != nil {
 		log.Fatalln("unable to start Workflow", err)
 	}
 
-	metadata, err := wfClient.WaitForWorkflowCompletion(r.Context(), we.InstanceID)
+	_, err = s.wfClient.WaitForWorkflowCompletion(r.Context(), id)
 	if err != nil {
 		log.Fatalln("unable to wait for workflow completion", err)
 	}
 
-	// Get the results
+	// Get the workflow state to retrieve results
+	state, err := s.wfClient.FetchWorkflowMetadata(r.Context(), id)
+	if err != nil {
+		log.Fatalln("unable to fetch workflow metadata", err)
+	}
+
 	var fullname string
-	if err := json.Unmarshal([]byte(metadata.SerializedOutput), &fullname); err != nil {
+	if err := json.Unmarshal([]byte(state.SerializedOutput), &fullname); err != nil {
 		log.Fatalln("unable to unmarshal state data", err)
 	}
 

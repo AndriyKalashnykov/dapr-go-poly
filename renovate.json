@@ -1,15 +1,25 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
+    "config:best-practices",
+    ":approveMajorUpdates",
+    ":label(dependencies)",
+    ":semanticCommitType(chore)",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigests",
     ":dependencyDashboard",
+    "schedule:daily",
+    ":automergePatch",
+    ":automergePr",
+    ":automergeRequireAllStatusChecks",
+    ":prConcurrentLimitNone",
+    ":separatePatchReleases",
+    "replacements:all",
+    "workarounds:all",
     ":semanticPrefixFixDepsChoreOthers",
     "group:dotNetCore",
     "group:monorepos",
-    "group:recommended",
-    "replacements:all",
-    "workarounds:all",
-    "config:best-practices",
-    "schedule:daily"
+    "group:recommended"
   ],
   "enabledManagers": [
     "github-actions",
@@ -59,13 +69,29 @@
       "groupName": "Pipeline dependencies"
     },
     {
+      "description": "Automerge major updates",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
       "description": "Automerge non-major updates",
       "matchUpdateTypes": [
         "minor",
-        "patch"
+        "patch",
+        "digest",
+        "pin",
+        "internal",
+        "devDependencies",
+        "ref",
+        "none",
+        "security",
+        "grop",
+        "unpin"
       ],
-      "matchDatasources": ["docker", "golang-version"],
-      "matchPackageNames": ["go", "golang"],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true

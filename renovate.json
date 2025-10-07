@@ -8,7 +8,6 @@
     "docker:pinDigests",
     "helpers:pinGitHubActionDigests",
     ":dependencyDashboard",
-    "schedule:daily",
     ":automergePatch",
     ":automergePr",
     ":automergeRequireAllStatusChecks",
@@ -85,6 +84,7 @@
         "patch",
         "digest",
         "pin",
+        "pinDigest",
         "internal",
         "devDependencies",
         "ref",
@@ -97,12 +97,6 @@
       "automergeType": "pr",
       "platformAutomerge": true
     },
-    {
-      "description": "Enforce bump range strategy",
-      "matchDatasources": ["docker", "golang-version"],
-      "matchPackageNames": ["go", "golang"],
-      "rangeStrategy": "bump"
-    }
   ],
   "platformAutomerge": true,
   "prConcurrentLimit": 0,

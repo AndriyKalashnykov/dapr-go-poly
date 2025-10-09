@@ -20,12 +20,6 @@
     "group:monorepos",
     "group:recommended"
   ],
-  "enabledManagers": [
-    "github-actions",
-    "nuget",
-    "gomod",
-    "docker"
-  ],
   "labels": [
     "dependencies"
   ],

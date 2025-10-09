@@ -23,7 +23,8 @@
   "enabledManagers": [
     "github-actions",
     "nuget",
-    "gomod"
+    "gomod",
+    "docker"
   ],
   "labels": [
     "dependencies"

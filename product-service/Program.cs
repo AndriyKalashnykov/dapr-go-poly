@@ -1,7 +1,6 @@
 using System.Reflection;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 

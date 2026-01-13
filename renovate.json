@@ -26,8 +26,8 @@
   "packageRules": [
     {
       "groupName": "ApplicationInsights",
-      "matchPackagePatterns": [
-        "ApplicationInsights"
+      "matchPackageNames": [
+        "/ApplicationInsights/"
       ]
     },
     {
@@ -46,14 +46,14 @@
     },
     {
       "groupName": "System.CommandLine",
-      "matchPackagePatterns": [
-        "^System\\.CommandLine"
+      "matchPackageNames": [
+        "/^System\\.CommandLine/"
       ]
     },
     {
       "groupName": "XUnit",
-      "matchPackagePatterns": [
-        "^xunit"
+      "matchPackageNames": [
+        "/^xunit/"
       ]
     }
   ],

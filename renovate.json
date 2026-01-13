@@ -26,8 +26,8 @@
   "packageRules": [
     {
       "groupName": "ApplicationInsights",
-      "matchPackageNames": [
-        "/ApplicationInsights/"
+      "matchPackagePatterns": [
+        "ApplicationInsights"
       ]
     },
     {
@@ -46,52 +46,16 @@
     },
     {
       "groupName": "System.CommandLine",
-      "matchPackageNames": [
-        "System.CommandLine{/,}**"
+      "matchPackagePatterns": [
+        "^System\\.CommandLine"
       ]
     },
     {
       "groupName": "XUnit",
-      "matchPackageNames": [
-        "xunit{/,}**"
+      "matchPackagePatterns": [
+        "^xunit"
       ]
-    },
-    {
-      "description": "Automerge github-actions updates",
-      "matchManagers": ["github-actions"],
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true
-    },
-    {
-      "description": "Automerge major updates",
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true
-    },
-    {
-      "description": "Automerge non-major updates",
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "digest",
-        "pin",
-        "pinDigest",
-        "internal",
-        "devDependencies",
-        "ref",
-        "none",
-        "security",
-        "grop",
-        "unpin"
-      ],
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true
-    },
+    }
   ],
   "platformAutomerge": true,
   "prConcurrentLimit": 0,

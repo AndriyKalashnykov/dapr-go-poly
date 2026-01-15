@@ -2,12 +2,12 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:best-practices",
-    ":approveMajorUpdates",
     ":label(dependencies)",
     ":semanticCommitType(chore)",
     "docker:pinDigests",
     "helpers:pinGitHubActionDigests",
     ":dependencyDashboard",
+    ":automergeMinor",
     ":automergePatch",
     ":automergePr",
     ":automergeRequireAllStatusChecks",
@@ -20,6 +20,9 @@
     "group:monorepos",
     "group:recommended"
   ],
+  "major": {
+    "automerge": true
+  },
   "labels": [
     "dependencies"
   ],

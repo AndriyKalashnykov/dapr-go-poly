@@ -12,7 +12,6 @@
     ":automergePr",
     ":automergeRequireAllStatusChecks",
     ":prConcurrentLimitNone",
-    ":separatePatchReleases",
     "replacements:all",
     "workarounds:all",
     ":semanticPrefixFixDepsChoreOthers",
@@ -58,11 +57,33 @@
       "matchPackageNames": [
         "/^xunit/"
       ]
+    },
+    {
+      "description": "Automerge all Go dependencies when checks pass",
+      "matchManagers": ["gomod"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash",
+      "ignoreTests": false
+    },
+    {
+      "description": "Automerge all .NET dependencies when checks pass",
+      "matchManagers": ["nuget"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash",
+      "ignoreTests": false
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["golang"],
+      "enabled": false
     }
   ],
   "platformAutomerge": true,
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
   "dependencyDashboard": true,
-  "gitAuthor": "Renovate Bot <bot@renovateapp.com>"
+  "gitAuthor": "Renovate Bot <bot@renovateapp.com>",
+  "rebaseWhen": "conflicted"
 }

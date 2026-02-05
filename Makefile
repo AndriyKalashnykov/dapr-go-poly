@@ -7,7 +7,7 @@ test:
 
 build:
 	@cd basket-service && go mod download && go build -o main main.go
-	@cd basket-service && go mod download && go build -o main main.go
+	@cd onboarding && go mod download && go build -o main main.go
 	@cd order-service && dotnet build order-service.csproj && cd ..
 	@cd product-service && dotnet build product-service.csproj && cd ..
 

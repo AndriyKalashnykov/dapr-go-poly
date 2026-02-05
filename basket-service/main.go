@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 
 	dapr "github.com/dapr/go-sdk/client"
@@ -58,11 +58,11 @@ func main() {
 	// })
 
 	data, err := client.InvokeMethod(ctx, "product-service", "/api/products/72119506-89ef-4c0c-ace7-6cbd984bfc50", "GET")
-		
+
 	log.Printf("%v", err)
 	log.Printf("%v", data)
 
-	// app.Get("/api/basket/:id", func(c *fiber.Ctx) error {
+	// app.Get("/api/basket/:id", func(c fiber.Ctx) error {
 	// 	id, err := uuid.Parse(c.Params("id"))
 	// 	if err != nil {
 	// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Could not parse id to UUID"})
@@ -81,9 +81,9 @@ func main() {
 	// 	return c.Status(fiber.StatusOK).JSON(basket)
 	// })
 
-	// app.Post("/api/basket", func(c *fiber.Ctx) error {
+	// app.Post("/api/basket", func(c fiber.Ctx) error {
 	// 	var request CreateBasketRequest
-	// 	if err := c.BodyParser(&request); err != nil {
+	// 	if err := c.Bind().Body(&request); err != nil {
 	// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": err.Error()})
 	// 	}
 
@@ -141,7 +141,7 @@ func main() {
 	// 	return c.Status(fiber.StatusOK).JSON(basket)
 	// })
 
-	// app.Get("/api/basket/:id/checkout", func(c *fiber.Ctx) error {
+	// app.Get("/api/basket/:id/checkout", func(c fiber.Ctx) error {
 	// 	id, err := uuid.Parse(c.Params("id"))
 	// 	if err != nil {
 	// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Could not parse id to UUID"})

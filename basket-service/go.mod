@@ -3,7 +3,7 @@ module github.com/AndriyKalashnykov/dapr-go-poly/basket-service
 go 1.25.7
 
 require (
-	github.com/dapr/go-sdk v1.13.0
+	github.com/dapr/go-sdk v1.14.1
 	github.com/gofiber/fiber/v3 v3.1.0
 	github.com/google/uuid v1.6.0
 )
@@ -12,9 +12,9 @@ require (
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/dapr/dapr v1.16.8 // indirect
+	github.com/dapr/dapr v1.17.0 // indirect
 	github.com/dapr/durabletask-go v0.11.0 // indirect
-	github.com/dapr/kit v0.16.1 // indirect
+	github.com/dapr/kit v0.17.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gofiber/schema v1.7.0 // indirect

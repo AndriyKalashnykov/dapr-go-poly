@@ -31,10 +31,10 @@ public class OrdersConsumer : BackgroundService
 
         var factory = new ConnectionFactory()
         {
-            HostName = rabbitMQServer,
+            HostName = rabbitMQServer ?? "localhost",
             Port = port,
-            UserName = rabbitMQUser,
-            Password = rabbitMQPass
+            UserName = rabbitMQUser ?? "guest",
+            Password = rabbitMQPass ?? "guest"
         };
 
         try

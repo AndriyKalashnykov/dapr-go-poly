@@ -1,2 +1,2 @@
 dapr init
-dapr run go run onboarding.go
+dapr run go run main.go

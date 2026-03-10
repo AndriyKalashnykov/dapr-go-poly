@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dapr/durabletask-go/workflow"
 	"github.com/dapr/go-sdk/client"
-	"github.com/dapr/go-sdk/workflow"
 )
 
 type Server struct {
@@ -37,31 +37,26 @@ type OnboardingApprovalRequest struct {
 }
 
 func main() {
-	w, err := workflow.NewWorker()
+	wfClient, err := client.NewWorkflowClient()
 	if err != nil {
+		log.Fatalf("failed to initialise workflow client: %v", err)
+	}
+
+	r := workflow.NewRegistry()
+	if err := r.AddWorkflow(OnboardingWorkflow); err != nil {
+		log.Fatal(err)
+	}
+	if err := r.AddActivity(CreateUser); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := w.RegisterWorkflow(OnboardingWorkflow); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := w.RegisterActivity(CreateUser); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := w.Start(); err != nil {
+	if err := wfClient.StartWorker(context.Background(), r); err != nil {
 		log.Fatal(err)
 	}
 
 	c, err := client.NewClient()
 	if err != nil {
 		log.Fatalf("failed to intialise client: %v", err)
-	}
-
-	wfClient, err := workflow.NewClient()
-	if err != nil {
-		log.Fatalf("failed to initialise workflow client: %v", err)
 	}
 
 	s := NewServer(c, wfClient)
@@ -116,7 +111,7 @@ func (s *Server) handleCreateOnboarding(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	id, err := s.wfClient.ScheduleNewWorkflow(context.Background(), "OnboardingWorkflow", workflow.WithInput(request))
+	id, err := s.wfClient.ScheduleWorkflow(context.Background(), "OnboardingWorkflow", workflow.WithInput(request))
 	if err != nil {
 		log.Fatalln("unable to start Workflow", err)
 	}
@@ -133,7 +128,7 @@ func (s *Server) handleCreateOnboarding(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var fullname string
-	if err := json.Unmarshal([]byte(state.SerializedOutput), &fullname); err != nil {
+	if err := json.Unmarshal([]byte(state.Output.GetValue()), &fullname); err != nil {
 		log.Fatalln("unable to unmarshal state data", err)
 	}
 
@@ -161,7 +156,7 @@ func OnboardingWorkflow(ctx *workflow.WorkflowContext) (any, error) {
 
 	// Create user
 	var fullname string
-	err = ctx.CallActivity(CreateUser, workflow.ActivityInput(request)).Await(&fullname)
+	err = ctx.CallActivity(CreateUser, workflow.WithActivityInput(request)).Await(&fullname)
 
 	return fullname, err
 }

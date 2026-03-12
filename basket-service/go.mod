@@ -2,8 +2,6 @@ module github.com/AndriyKalashnykov/dapr-go-poly/basket-service
 
 go 1.26.1
 
-
-
 require (
 	github.com/dapr/go-sdk v1.14.1
 	github.com/gofiber/fiber/v3 v3.1.0

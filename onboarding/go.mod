@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/dapr/durabletask-go v0.11.3
-	github.com/dapr/go-sdk v1.14.1
+	github.com/dapr/go-sdk v1.14.2
 )
 
 require (

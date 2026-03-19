@@ -9,7 +9,7 @@ services:
   placement:
     # https://github.com/dapr/dapr/pkgs/container/daprd/versions?filters%5Bversion_type%5D=tagged
     # daprio uses http by default, whyle ghcr.io uses https, can be helpful in environments with "man in the middle" Netscope etc.
-    image: "daprio/dapr:1.17.1@sha256:13b3bff0233320ac2aa57d149b0a7db83b5eb32c95facb306d613a5989e0fe81"
+    image: "daprio/dapr:1.17.2@sha256:74868df2f4d0d4c9b4abec643ef6a1a374abfb03a67365b4208da6a95fe6342a"
     command: [
       "./placement",
       "--port", "50006"
@@ -19,7 +19,7 @@ services:
 
   scheduler:
     user: "1000"
-    image: "daprio/dapr:1.17.1@sha256:13b3bff0233320ac2aa57d149b0a7db83b5eb32c95facb306d613a5989e0fe81"
+    image: "daprio/dapr:1.17.2@sha256:74868df2f4d0d4c9b4abec643ef6a1a374abfb03a67365b4208da6a95fe6342a"
     command: [
       "./scheduler",
       "--port", "50007",

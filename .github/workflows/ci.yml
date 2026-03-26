@@ -4,6 +4,13 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
 
   builds:
@@ -22,15 +29,15 @@ jobs:
         with:
           go-version-file: basket-service/go.mod
           cache: true
-          
+
       - name: Install .DotNet
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
-          
+
       - name: Build
         run: make build
-        
+
       - name: Image Build
         run: make image-build
 
@@ -54,4 +61,3 @@ jobs:
 
       - name: Run ${{ matrix.name }} tests
         run: make test
-

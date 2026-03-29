@@ -47,7 +47,7 @@ clean:
 		rm -f $$svc/main; \
 	done
 	@for svc in $(DOTNET_SERVICES); do \
-		cd $$svc && dotnet clean $$svc.csproj -c Release --nologo -v q && cd ..; \
+		(cd $$svc && dotnet clean $$svc.csproj -c Release --nologo -v q); \
 	done
 	@find . -type d \( -name bin -o -name obj \) -exec rm -rf {} + 2>/dev/null || true
 
@@ -55,29 +55,29 @@ clean:
 build: deps
 	@for svc in $(GO_SERVICES); do \
 		echo "Building $$svc..."; \
-		cd $$svc && go mod download && go build -o main main.go && cd ..; \
+		(cd $$svc && go mod download && go build -o main main.go) || exit 1; \
 	done
 	@for svc in $(DOTNET_SERVICES); do \
 		echo "Building $$svc..."; \
-		cd $$svc && dotnet build $$svc.csproj && cd ..; \
+		(cd $$svc && dotnet build $$svc.csproj) || exit 1; \
 	done
 
 #test: @ Run tests
 test: deps
 	@for svc in $(GO_SERVICES); do \
 		echo "Testing $$svc..."; \
-		cd $$svc && go test ./... && cd ..; \
+		(cd $$svc && go test ./...) || exit 1; \
 	done
 
 #lint: @ Run linters
 lint: deps deps-hadolint
 	@for svc in $(GO_SERVICES); do \
 		echo "Vetting $$svc..."; \
-		cd $$svc && go vet ./... && cd ..; \
+		(cd $$svc && go vet ./...) || exit 1; \
 	done
 	@for svc in $(DOTNET_SERVICES); do \
 		echo "Formatting $$svc..."; \
-		cd $$svc && dotnet format $$svc.csproj --verify-no-changes && cd ..; \
+		(cd $$svc && dotnet format $$svc.csproj --verify-no-changes) || exit 1; \
 	done
 	@for svc in $(DOTNET_SERVICES); do \
 		if [ -f $$svc/Dockerfile ]; then \
@@ -90,11 +90,11 @@ lint: deps deps-hadolint
 update: deps
 	@for svc in $(GO_SERVICES); do \
 		echo "Updating $$svc..."; \
-		cd $$svc && go get -u ./... && go mod tidy && cd ..; \
+		(cd $$svc && go get -u ./... && go mod tidy) || exit 1; \
 	done
 	@for svc in $(DOTNET_SERVICES); do \
 		echo "Updating $$svc..."; \
-		cd $$svc && dotnet list package --outdated | grep -o '> \S*' | grep '[^> ]*' -o | xargs --no-run-if-empty -L 1 dotnet add package && cd ..; \
+		(cd $$svc && dotnet list package --outdated | grep -o '> \S*' | grep '[^> ]*' -o | xargs --no-run-if-empty -L 1 dotnet add package) || exit 1; \
 	done
 
 #image-build: @ Build Docker images

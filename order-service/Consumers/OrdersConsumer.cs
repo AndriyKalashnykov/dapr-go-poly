@@ -65,8 +65,6 @@ public class OrdersConsumer : BackgroundService
                         return;
                     }
 
-                    
-
                     await db.Orders.AddAsync(request);
                     await db.SaveChangesAsync();
                 }

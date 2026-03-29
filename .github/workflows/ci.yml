@@ -1,7 +1,9 @@
-name: ci
+name: CI
 
 on:
   push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
 
 permissions:
@@ -37,6 +39,9 @@ jobs:
 
       - name: Build
         run: make build
+
+      - name: Lint
+        run: make lint
 
       - name: Image Build
         run: make image-build

@@ -4,8 +4,8 @@ APP_NAME       := dapr-go-poly
 CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 
 # === Tool Versions (pinned) ===
-ACT_VERSION    := 0.2.86
-GOLANGCI_LINT_VERSION := 1.64.8
+ACT_VERSION      := 0.2.86
+HADOLINT_VERSION := 2.12.0
 
 # === Project Paths ===
 SOLUTION       := dapr-go-poly.sln
@@ -31,6 +31,14 @@ deps:
 deps-act: deps
 	@command -v act >/dev/null 2>&1 || { echo "Installing act $(ACT_VERSION)..."; \
 		curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash -s -- -b /usr/local/bin v$(ACT_VERSION); \
+	}
+
+#deps-hadolint: @ Install hadolint for Dockerfile linting
+deps-hadolint:
+	@command -v hadolint >/dev/null 2>&1 || { echo "Installing hadolint $(HADOLINT_VERSION)..."; \
+		curl -sSfL -o /tmp/hadolint https://github.com/hadolint/hadolint/releases/download/v$(HADOLINT_VERSION)/hadolint-Linux-x86_64 && \
+		install -m 755 /tmp/hadolint /usr/local/bin/hadolint && \
+		rm -f /tmp/hadolint; \
 	}
 
 #clean: @ Remove build artifacts
@@ -62,7 +70,7 @@ test: deps
 	done
 
 #lint: @ Run linters
-lint: deps
+lint: deps deps-hadolint
 	@for svc in $(GO_SERVICES); do \
 		echo "Vetting $$svc..."; \
 		cd $$svc && go vet ./... && cd ..; \
@@ -70,6 +78,12 @@ lint: deps
 	@for svc in $(DOTNET_SERVICES); do \
 		echo "Formatting $$svc..."; \
 		cd $$svc && dotnet format $$svc.csproj --verify-no-changes && cd ..; \
+	done
+	@for svc in $(DOTNET_SERVICES); do \
+		if [ -f $$svc/Dockerfile ]; then \
+			echo "Linting $$svc/Dockerfile..."; \
+			hadolint $$svc/Dockerfile; \
+		fi; \
 	done
 
 #update: @ Update all dependencies to latest versions
@@ -121,11 +135,6 @@ release:
 		git push && \
 		echo "Done."'
 
-.PHONY: help deps deps-act clean build test lint update \
-	image-build run compose-down compose-up \
-	ci ci-run release \
-	renovate-bootstrap renovate-validate
-
 # === Renovate ===
 NVM_VERSION := 0.40.4
 
@@ -142,3 +151,8 @@ renovate-bootstrap:
 #renovate-validate: @ Validate Renovate configuration
 renovate-validate: renovate-bootstrap
 	@npx --yes renovate --platform=local
+
+.PHONY: help deps deps-act deps-hadolint clean build test lint update \
+	image-build run compose-down compose-up \
+	ci ci-run release \
+	renovate-bootstrap renovate-validate

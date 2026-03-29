@@ -1,0 +1,5 @@
+# hadolint configuration
+# See: https://github.com/hadolint/hadolint#configure
+ignored:
+  # DL3008: Pin versions in apt get install - not applicable (.NET images)
+  - DL3008

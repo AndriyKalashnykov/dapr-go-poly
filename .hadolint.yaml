@@ -3,3 +3,5 @@
 ignored:
   # DL3008: Pin versions in apt get install - not applicable (.NET images)
   - DL3008
+  # DL3059: Multiple consecutive RUN instructions - intentional for Docker layer caching
+  - DL3059

@@ -2,38 +2,52 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:best-practices",
-    ":label(dependencies)",
-    ":semanticCommitType(chore)",
-    "docker:pinDigests",
-    "helpers:pinGitHubActionDigests",
-    ":dependencyDashboard",
-    ":automergeMinor",
-    ":automergePatch",
-    ":automergePr",
-    ":automergeRequireAllStatusChecks",
-    ":prConcurrentLimitNone",
-    "replacements:all",
-    "workarounds:all",
-    ":semanticPrefixFixDepsChoreOthers",
-    "group:dotNetCore",
-    "group:monorepos",
-    "group:recommended"
+    ":semanticCommitType(chore)"
   ],
-  "major": {
-    "automerge": true
+  "commitMessagePrefix": "chore(all): ",
+  "commitMessageAction": "update",
+  "commitBody": "Signed-off-by: Renovate Bot <bot@renovateapp.com>",
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 50,
+  "prHourlyLimit": 0,
+  "platformAutomerge": true,
+  "automerge": true,
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
+  "ignoreTests": false,
+  "rebaseWhen": "conflicted",
+  "enabledManagers": ["gomod", "nuget", "dockerfile", "docker-compose", "github-actions"],
+  "postUpdateOptions": ["gomodTidy"],
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "automerge": true,
+    "minimumReleaseAge": "0 days"
   },
-  "labels": [
-    "dependencies"
-  ],
   "packageRules": [
     {
-      "groupName": "ApplicationInsights",
-      "matchPackageNames": [
-        "/ApplicationInsights/"
-      ]
+      "description": "Wait 3 days before automerging major updates",
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "3 days"
     },
     {
-      "groupName": "Dotnet",
+      "description": "Group GitHub Actions into one PR",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "description": "Bump Go version in go.mod to latest patch",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "Group Dapr SDK dependencies",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["/^github\\.com\\/dapr/"],
+      "groupName": "Dapr SDK"
+    },
+    {
+      "description": "Group .NET Docker images, disable major updates",
       "matchPackageNames": [
         "dotnet-sdk",
         "mcr.microsoft.com/dotnet/aspnet",
@@ -41,49 +55,8 @@
         "mcr.microsoft.com/dotnet/runtime",
         "mcr.microsoft.com/dotnet/runtime-deps"
       ],
-      "extends": [
-        ":disableMajorUpdates",
-        ":pinDigestsDisabled"
-      ]
-    },
-    {
-      "groupName": "System.CommandLine",
-      "matchPackageNames": [
-        "/^System\\.CommandLine/"
-      ]
-    },
-    {
-      "groupName": "XUnit",
-      "matchPackageNames": [
-        "/^xunit/"
-      ]
-    },
-    {
-      "description": "Automerge all Go dependencies when checks pass",
-      "matchManagers": ["gomod"],
-      "automerge": true,
-      "automergeType": "pr",
-      "automergeStrategy": "squash",
-      "ignoreTests": false
-    },
-    {
-      "description": "Automerge all .NET dependencies when checks pass",
-      "matchManagers": ["nuget"],
-      "automerge": true,
-      "automergeType": "pr",
-      "automergeStrategy": "squash",
-      "ignoreTests": false
-    },
-    {
-      "matchManagers": ["gomod"],
-      "matchDepTypes": ["golang"],
-      "enabled": false
+      "groupName": "Dotnet Docker images",
+      "extends": [":disableMajorUpdates", ":pinDigestsDisabled"]
     }
-  ],
-  "platformAutomerge": true,
-  "prConcurrentLimit": 0,
-  "prHourlyLimit": 0,
-  "dependencyDashboard": true,
-  "gitAuthor": "Renovate Bot <bot@renovateapp.com>",
-  "rebaseWhen": "conflicted"
+  ]
 }

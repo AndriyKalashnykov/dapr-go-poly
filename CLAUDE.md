@@ -26,6 +26,7 @@ make ci-run        # Run GitHub Actions locally via act
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `ACT_VERSION` | `0.2.87` | Pinned act version for local CI |
+| `DAPR_VERSION` | `1.17.0` | Pinned Dapr CLI version |
 | `HADOLINT_VERSION` | `2.14.0` | Pinned hadolint version for Dockerfile linting |
 | `NVM_VERSION` | `0.40.4` | Pinned nvm version for Renovate validation |
 | `NODE_VERSION` | `22` | Pinned Node.js version for Renovate validation |
@@ -61,6 +62,8 @@ A cleanup workflow (`.github/workflows/cleanup-runs.yml`) removes old workflow r
 - .NET services use `dotnet build` / `dotnet format` with `TreatWarningsAsErrors` enabled
 - Docker images built with `docker buildx`
 - Dockerfiles linted with hadolint via `make lint`
+- Dapr CLI version pinned as `DAPR_VERSION` in Makefile — always use a specific version, never `latest`
+- Makefile tool versions (`ACT_VERSION`, `DAPR_VERSION`, `HADOLINT_VERSION`, `NVM_VERSION`) tracked by Renovate via `customManagers`
 
 ## Skills
 

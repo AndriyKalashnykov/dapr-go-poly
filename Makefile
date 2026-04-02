@@ -5,6 +5,7 @@ CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "de
 
 # === Tool Versions (pinned) ===
 ACT_VERSION      := 0.2.87
+DAPR_VERSION     := 1.17.0
 HADOLINT_VERSION := 2.14.0
 NVM_VERSION      := 0.40.4
 NODE_VERSION     := 22
@@ -28,6 +29,7 @@ deps:
 	@command -v go >/dev/null 2>&1 || { echo "Error: Go required. See https://go.dev/dl/"; exit 1; }
 	@command -v dotnet >/dev/null 2>&1 || { echo "Error: .NET SDK required. See https://dotnet.microsoft.com/download"; exit 1; }
 	@command -v docker >/dev/null 2>&1 || { echo "Error: Docker required. See https://docs.docker.com/get-docker/"; exit 1; }
+	@command -v dapr >/dev/null 2>&1 || { echo "Warning: Dapr CLI $(DAPR_VERSION) not found. See https://docs.dapr.io/getting-started/install-dapr-cli/"; }
 
 #deps-act: @ Install act for local CI (idempotent)
 deps-act: deps

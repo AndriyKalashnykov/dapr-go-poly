@@ -23,7 +23,7 @@ make compose-up    # start all services via Docker Compose
 | [Go](https://go.dev/dl/) | 1.26+ | Go services (basket-service, onboarding) |
 | [.NET SDK](https://dotnet.microsoft.com/download) | 10.0+ | .NET services (order-service, product-service) |
 | [Docker](https://www.docker.com/) | latest | Container builds and Compose orchestration |
-| [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/) | latest | Local Dapr runtime (optional) |
+| [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/) | 1.17.0 | Local Dapr runtime (optional) |
 
 Install all required dependencies:
 

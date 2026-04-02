@@ -26,7 +26,7 @@ make ci-run        # Run GitHub Actions locally via act
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `ACT_VERSION` | `0.2.87` | Pinned act version for local CI |
-| `HADOLINT_VERSION` | `2.12.0` | Pinned hadolint version for Dockerfile linting |
+| `HADOLINT_VERSION` | `2.14.0` | Pinned hadolint version for Dockerfile linting |
 | `NVM_VERSION` | `0.40.4` | Pinned nvm version for Renovate validation |
 | `NODE_VERSION` | `22` | Pinned Node.js version for Renovate validation |
 | `GO_SERVICES` | `basket-service onboarding` | Go service directories |
@@ -74,3 +74,9 @@ Use the following skills when working on related files:
 | `.github/workflows/*.yml` | `/ci-workflow` |
 
 When spawning subagents, always pass conventions from the respective skill into the agent's prompt.
+
+## Monitoring Checklist
+
+Items to check on next upgrade analysis:
+
+- [ ] **grpc GO-2026-4762** — `google.golang.org/grpc` v1.79.2 has auth bypass fixed in v1.79.3. Indirect dep via `dapr/go-sdk`. Not called by our code. Will resolve when Dapr Go SDK bumps grpc. Track: `dapr/go-sdk` releases.

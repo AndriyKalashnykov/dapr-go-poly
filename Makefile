@@ -5,7 +5,7 @@ CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "de
 
 # === Tool Versions (pinned) ===
 ACT_VERSION      := 0.2.87
-HADOLINT_VERSION := 2.12.0
+HADOLINT_VERSION := 2.14.0
 NVM_VERSION      := 0.40.4
 NODE_VERSION     := 22
 

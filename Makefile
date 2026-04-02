@@ -4,7 +4,7 @@ APP_NAME       := dapr-go-poly
 CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 
 # === Tool Versions (pinned) ===
-ACT_VERSION      := 0.2.86
+ACT_VERSION      := 0.2.87
 HADOLINT_VERSION := 2.12.0
 
 # === Project Paths ===

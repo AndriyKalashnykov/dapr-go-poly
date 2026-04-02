@@ -17,7 +17,6 @@
   "automergeType": "branch",
   "automergeStrategy": "squash",
   "ignoreTests": false,
-  "rebaseWhen": "conflicted",
   "enabledManagers": [
     "gomod",
     "nuget",

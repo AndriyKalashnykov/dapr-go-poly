@@ -20,7 +20,7 @@ make compose-up    # start all services via Docker Compose
 | Tool | Version | Purpose |
 |------|---------|---------|
 | [GNU Make](https://www.gnu.org/software/make/) | 3.81+ | Build orchestration |
-| [Go](https://go.dev/dl/) | 1.24+ | Go services (basket-service, onboarding) |
+| [Go](https://go.dev/dl/) | 1.26+ | Go services (basket-service, onboarding) |
 | [.NET SDK](https://dotnet.microsoft.com/download) | 10.0+ | .NET services (order-service, product-service) |
 | [Docker](https://www.docker.com/) | latest | Container builds and Compose orchestration |
 | [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/) | latest | Local Dapr runtime (optional) |
@@ -41,10 +41,16 @@ Run `make help` to see all available targets.
 |--------|-------------|
 | `make build` | Build all services |
 | `make test` | Run tests |
-| `make lint` | Run linters (go vet + dotnet format + hadolint) |
 | `make clean` | Remove build artifacts |
 | `make run` | Run order-service via Dapr |
 | `make update` | Update all dependencies to latest versions |
+
+### Code Quality
+
+| Target | Description |
+|--------|-------------|
+| `make format` | Auto-fix formatting (Go + .NET) |
+| `make lint` | Run linters (go vet + dotnet format --verify + hadolint) |
 
 ### Docker
 
@@ -58,17 +64,21 @@ Run `make help` to see all available targets.
 
 | Target | Description |
 |--------|-------------|
-| `make ci` | Full local CI pipeline (clean, build, lint, test) |
+| `make ci` | Full local CI pipeline (format, lint, test, build) |
 | `make ci-run` | Run GitHub Actions workflow locally via [act](https://github.com/nektos/act) |
 
 ### Utilities
 
 | Target | Description |
 |--------|-------------|
-| `make deps` | Install required tools (idempotent) |
+| `make help` | List available targets (default) |
+| `make deps` | Verify required tools (idempotent) |
 | `make deps-act` | Install act for local CI (idempotent) |
 | `make deps-hadolint` | Install hadolint for Dockerfile linting |
+| `make deps-prune` | Remove unused and redundant dependencies |
+| `make deps-prune-check` | Verify no prunable dependencies (CI gate) |
 | `make release` | Create and push a new tag |
+| `make renovate-bootstrap` | Install nvm and npm for Renovate |
 | `make renovate-validate` | Validate Renovate configuration |
 
 ## Project Structure
@@ -78,10 +88,10 @@ basket-service/        # Go service
 onboarding/            # Go service
 order-service/         # .NET service (with Dockerfile)
 product-service/       # .NET service (with Dockerfile)
-.dapr/                 # Dapr sidecar configuration
+dapr-go-poly.sln       # .NET solution file
 docker-compose.yml     # Local orchestration
 global.json            # .NET SDK version pin
-dapr-go-poly.sln       # .NET solution file
+renovate.json          # Renovate dependency update configuration
 ```
 
 ## CI/CD
@@ -90,8 +100,10 @@ GitHub Actions runs on every push to `main`, tags `v*`, and pull requests.
 
 | Job | Triggers | Steps |
 |-----|----------|-------|
-| **builds** | push (main, tags), PR | Build, Lint, Image Build |
-| **tests** | push (main, tags), PR | Unit Tests |
+| **static-check** | push (main, tags), PR | Lint |
+| **build** | after static-check passes | Build |
+| **test** | after static-check passes | Unit Tests |
+| **docker** | tag pushes only (`v*`) | Image Build |
 
 A weekly cleanup workflow removes old workflow runs (retains 7 days, minimum 5 runs).
 

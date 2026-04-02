@@ -5,7 +5,7 @@
 **dapr-go-poly** is a polyglot microservices project using [Dapr](https://dapr.io/) with Go and .NET services, orchestrated via Docker Compose.
 
 - **Repository**: `AndriyKalashnykov/dapr-go-poly`
-- **Go services**: `basket-service`, `onboarding` (Go 1.24+)
+- **Go services**: `basket-service`, `onboarding` (Go 1.26+)
 - **DotNet services**: `order-service`, `product-service` (.NET 10)
 
 ## Build & Test
@@ -14,9 +14,10 @@
 make deps          # Verify required tools (go, dotnet, docker)
 make build         # Build all services
 make test          # Run Go tests
-make lint          # Run linters (go vet + dotnet format + hadolint)
+make lint          # Run linters (go vet + dotnet format --verify + hadolint)
+make format        # Auto-fix formatting (Go + .NET)
 make clean         # Remove build artifacts
-make ci            # Full local CI pipeline (clean, build, lint, test)
+make ci            # Full local CI pipeline (format, lint, test, build)
 make ci-run        # Run GitHub Actions locally via act
 ```
 
@@ -24,9 +25,10 @@ make ci-run        # Run GitHub Actions locally via act
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `ACT_VERSION` | `0.2.86` | Pinned act version for local CI |
+| `ACT_VERSION` | `0.2.87` | Pinned act version for local CI |
 | `HADOLINT_VERSION` | `2.12.0` | Pinned hadolint version for Dockerfile linting |
 | `NVM_VERSION` | `0.40.4` | Pinned nvm version for Renovate validation |
+| `NODE_VERSION` | `22` | Pinned Node.js version for Renovate validation |
 | `GO_SERVICES` | `basket-service onboarding` | Go service directories |
 | `DOTNET_SERVICES` | `order-service product-service` | .NET service directories |
 
@@ -37,26 +39,28 @@ basket-service/    # Go service
 onboarding/        # Go service
 order-service/     # .NET service (with Dockerfile)
 product-service/   # .NET service (with Dockerfile)
-.dapr/             # Dapr sidecar configuration
+dapr-go-poly.sln   # .NET solution file
 docker-compose.yml # Local orchestration
 global.json        # .NET SDK version pin
+renovate.json      # Renovate dependency update configuration
 ```
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to `main`, tags `v*`, and pull requests:
-- **builds** job: Checkout, Setup Go, Setup .NET, Build, Lint, Image Build
-- **tests** job: Checkout, Setup Go, Run unit tests
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to `main`, tags `v*`, pull requests, and `workflow_call`:
+- **static-check** job: Checkout, Setup Go, Setup .NET, Lint
+- **build** job (needs static-check): Checkout, Setup Go, Setup .NET, Build
+- **test** job (needs static-check): Checkout, Setup Go, Setup .NET, Test
+- **docker** job (needs build, tag-gated): Checkout, Setup .NET, Image Build
 
-A cleanup workflow (`.github/workflows/cleanup-runs.yml`) removes old workflow runs weekly.
+A cleanup workflow (`.github/workflows/cleanup-runs.yml`) removes old workflow runs weekly (also supports `workflow_dispatch`).
 
 ## Development Conventions
 
 - Go services use standard `go build` / `go test` toolchain
-- .NET services use `dotnet build` / `dotnet format`
+- .NET services use `dotnet build` / `dotnet format` with `TreatWarningsAsErrors` enabled
 - Docker images built with `docker buildx`
 - Dockerfiles linted with hadolint via `make lint`
-- Dapr sidecar configuration in `.dapr/`
 
 ## Skills
 

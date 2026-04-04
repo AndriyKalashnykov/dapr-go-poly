@@ -33,8 +33,8 @@ services:
     ports:
       - "50007:50007"
     volumes:
-      - ./.dapr_scheduler/0:/var/run/dapr/scheduler:rw # Scheduler state persisted across restars
-#      - type: tmpfs # WARNING - Sheduler state will not be persisted across restarts
+      - ./.dapr_scheduler/0:/var/run/dapr/scheduler:rw # Scheduler state persisted across restarts
+#      - type: tmpfs # WARNING - Scheduler state will not be persisted across restarts
 #        target: /var/run/dapr/scheduler
     depends_on:
       placement:

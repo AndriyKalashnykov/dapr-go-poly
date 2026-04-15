@@ -18,6 +18,7 @@ set -euo pipefail
 
 PRODUCT_BASE="${PRODUCT_BASE:-http://localhost:1000}"
 ORDER_BASE="${ORDER_BASE:-http://localhost:1001}"
+ONBOARDING_BASE="${ONBOARDING_BASE:-http://localhost:1002}"
 RABBIT_API="${RABBIT_API:-http://localhost:15672}"
 RABBIT_USER="${RABBIT_USER:-guest}"
 RABBIT_PASS="${RABBIT_PASS:-guest}"
@@ -114,6 +115,27 @@ echo
 echo "=== Waiting for services (timeout: ${READINESS_TIMEOUT}s each) ==="
 wait_for_service "$PRODUCT_BASE/api/products" "product-service" || exit 1
 wait_for_service "$ORDER_BASE/api/orders"     "order-service"   || exit 1
+# onboarding has no idempotent GET; probe the approve endpoint with a random
+# id. Expected 502 means: server is up AND its Dapr sidecar is reachable AND
+# the sidecar correctly reports "instance not found." A 5xx from a dead
+# sidecar looks different; a pre-502 connection refused means the service
+# isn't listening yet. Any non-502 response is a readiness failure.
+wait_for_onboarding() {
+  local deadline=$((SECONDS + READINESS_TIMEOUT))
+  while (( SECONDS < deadline )); do
+    local code
+    code=$(curl -s -o /dev/null -w '%{http_code}' -m 2 \
+      -X POST "$ONBOARDING_BASE/onboardings/readiness-probe-$$/approve" 2>/dev/null || echo "000")
+    if [[ "$code" == "502" ]]; then
+      echo "  ${color_green}onboarding ready${color_reset} after $((SECONDS))s (sidecar returned 502 on unknown instance, as expected)"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "${color_red}FATAL${color_reset}: onboarding did not become ready within ${READINESS_TIMEOUT}s"
+  return 1
+}
+wait_for_onboarding || exit 1
 wait_for_auth_service() {
   local url="$1" name="$2" user="$3" pass="$4"
   local deadline=$((SECONDS + READINESS_TIMEOUT))
@@ -229,6 +251,27 @@ if (( matched == 1 )); then
 else
   log_fail "Order $order_id not visible in GET /api/orders within 30s"
 fi
+
+# ------------------------------------------------------------------
+# Layer 6 — onboarding approve/deny error paths
+# ------------------------------------------------------------------
+# The real happy-path flow (POST /onboarding → approve → get fullname) is
+# currently not testable via pure HTTP because handleCreateOnboarding blocks
+# until completion and never returns the workflow runID to the caller. The
+# runID is required to address the approve/deny endpoints. Options on the
+# table for full flow coverage (tracked as iterations B + C of this work):
+#   - Add `?id=<known>` query param to POST /onboarding so a caller can
+#     choose the workflow instance ID up-front (iteration B).
+#   - Refactor POST /onboarding to return 202 { "id": "..." } and add a
+#     GET /onboardings/{id}/status endpoint (iteration C; supersedes B).
+# For now we verify the approve/deny handlers correctly surface the Dapr
+# sidecar's "instance not found" error as a 502, which proves the sidecar
+# wiring end-to-end without needing to know a live runID.
+
+echo
+echo "--- onboarding approve/deny error paths ---"
+assert_status POST "$ONBOARDING_BASE/onboardings/e2e-no-such-instance/approve" "502"
+assert_status POST "$ONBOARDING_BASE/onboardings/e2e-no-such-instance/deny"    "502"
 
 # ------------------------------------------------------------------
 # Cleanup

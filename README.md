@@ -46,7 +46,7 @@ product-service/                     # .NET service (EF Core / Postgres)
 order-service.IntegrationTests/      # TUnit + Testcontainers integration tests
 product-service.IntegrationTests/    # TUnit + Testcontainers integration tests
 e2e/
-  docker-compose.e2e.yml             # Self-contained e2e stack (postgres + rabbitmq + services)
+  docker-compose.e2e.yml             # Self-contained e2e stack (Dapr control plane + backing services + all 3 app services + onboarding sidecar)
   e2e-test.sh                        # curl-based e2e assertions
 dapr-go-poly.slnx                    # .NET solution file (modern XML format)
 docker-compose.yml                   # Base: Dapr control plane (placement + scheduler)
@@ -70,8 +70,8 @@ make compose-up        # bring up full stack (postgres + rabbitmq + services + D
 | Layer | Target | Speed | Dependencies |
 |-------|--------|-------|--------------|
 | **Unit** | `make test` | seconds | None — pure Go/FluentValidation logic |
-| **Integration** | `make integration-test` | tens of seconds | Testcontainers (Postgres, RabbitMQ); .NET uses [TUnit](https://github.com/thomhurst/TUnit) + `WebApplicationFactory` via `dotnet run` (Microsoft.Testing.Platform); Go uses `//go:build integration` |
-| **E2E** | `make e2e` | minutes | Self-contained `e2e/docker-compose.e2e.yml` (postgres + rabbitmq + product-service + order-service). Exercises HTTP endpoints, CRUD round-trip, and validation negatives via `e2e/e2e-test.sh`. |
+| **Integration** | `make integration-test` | tens of seconds | Testcontainers (Postgres, RabbitMQ); .NET uses [TUnit](https://github.com/thomhurst/TUnit) + `WebApplicationFactory` via `dotnet run` (Microsoft.Testing.Platform). Go integration tests are unit-test shape using a hand-rolled `workflowClient` fake — Dapr sidecar interactions are covered by e2e, not here |
+| **E2E** | `make e2e` | ~3–5 min | Self-contained `e2e/docker-compose.e2e.yml` (placement + scheduler + postgres + rabbitmq + product-service + order-service + onboarding + its Dapr sidecar). Exercises HTTP endpoints, CRUD round-trip, validation negatives, the RabbitMQ → OrdersConsumer → Postgres async pipeline, and onboarding's Dapr sidecar-backed approve/deny error paths via `e2e/e2e-test.sh` |
 
 ## Prerequisites
 

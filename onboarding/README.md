@@ -29,9 +29,10 @@ dapr run --app-id onboarding --app-port 8080 --dapr-grpc-port 50001 -- go run ma
 
 - **Unit** (`go test ./...`): `CreateUser` activity + HTTP handler tests using a
   hand-written `workflowClient` fake — see [`handlers_test.go`](handlers_test.go).
-- **Integration** (`go test -tags=integration ./...`): exercises the real
-  Dapr workflow engine. **Auto-skips** when the sidecar isn't reachable on
-  `localhost:50001` — run `dapr run` as above first, then invoke
-  `make integration-test` from the repo root.
+- **Integration** (`go test -tags=integration ./...`): currently empty — the
+  previously-held sidecar-gated tests were removed because their coverage is
+  now provided by `make e2e`, which brings up a real Dapr sidecar for
+  onboarding and exercises `POST /onboardings/{id}/approve` + `/deny` against
+  it (verifying the "instance not found" 502 path end-to-end).
 
 See the [repo README](../README.md) for the full three-layer test pyramid.

@@ -1,12 +1,10 @@
 #
 # Self-contained e2e compose file.
 #
-# Rationale: the base docker-compose.yml is intended for local `dapr run` dev
-# workflows and currently can't boot cleanly against Dapr 1.17.3 (the scheduler
-# command uses a removed --replica-count flag). The e2e tests here exercise
-# HTTP endpoints, Postgres round-trips, and cross-service fan-out via direct
-# HttpClient — none of which require the Dapr sidecar — so this file declares
-# the full e2e stack without Dapr.
+# Rationale: isolates the e2e stack from the base docker-compose.yml so
+# developer-side compose state (stale volumes, host port collisions) can't
+# contaminate the CI run. Duplicates placement + scheduler + postgres +
+# rabbitmq from the base file; accepted cost for the isolation.
 #
 # Note: mcr.microsoft.com/dotnet/aspnet:10.0 is chiseled (no shell/wget/curl),
 # so per-container healthchecks for the .NET services aren't feasible.
@@ -19,6 +17,42 @@
 #
 
 services:
+
+  # ------------------------------------------------------------------
+  # Dapr control plane (placement + scheduler)
+  # ------------------------------------------------------------------
+  # onboarding's Dapr durable workflows need both. Scheduler uses tmpfs
+  # because the image runs nonroot (UID 65532) and host bind mounts / default
+  # named volumes are root-owned — tmpfs sidesteps the perms problem.
+
+  placement:
+    image: "daprio/dapr:1.17.3@sha256:b0a7b27b928906230acd2b061306a8f4aa09ee36a27beb5627ab3f05514d7da4"
+    command: ["./placement", "--port", "50006"]
+
+  scheduler:
+    image: "daprio/dapr:1.17.3@sha256:b0a7b27b928906230acd2b061306a8f4aa09ee36a27beb5627ab3f05514d7da4"
+    # Dapr 1.17.3 flag inventory: --replica-count removed; --etcd-client-ports
+    # renamed to --etcd-client-port (single uint); --etcd-client-http-ports
+    # removed; --initial-cluster renamed to --etcd-initial-cluster.
+    command:
+      - "./scheduler"
+      - "--port"
+      - "50007"
+      - "--id"
+      - "scheduler-0"
+      - "--etcd-data-dir"
+      - "/var/run/dapr/scheduler"
+      - "--etcd-initial-cluster"
+      - "scheduler-0=http://scheduler-0:2380"
+    tmpfs:
+      - /var/run/dapr/scheduler
+    depends_on:
+      placement:
+        condition: service_started
+
+  # ------------------------------------------------------------------
+  # Backing services
+  # ------------------------------------------------------------------
 
   postgres:
     image: postgres:17-alpine
@@ -47,6 +81,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 15
+
+  # ------------------------------------------------------------------
+  # Application services + Dapr sidecars
+  # ------------------------------------------------------------------
 
   product-service:
     build:
@@ -90,3 +128,44 @@ services:
         condition: service_healthy
       product-service:
         condition: service_started
+
+  onboarding:
+    build:
+      context: ../onboarding
+      dockerfile: Dockerfile
+    environment:
+      # The onboarding process connects to its sidecar on the default gRPC
+      # port. network_mode: service:onboarding-dapr on the sidecar puts them
+      # on the same loopback, so DAPR_GRPC_PORT defaults to 50001.
+      DAPR_GRPC_PORT: "50001"
+    ports:
+      - "1002:8080"
+    depends_on:
+      placement:
+        condition: service_started
+      scheduler:
+        condition: service_started
+
+  onboarding-dapr:
+    image: "daprio/daprd:1.17.3"
+    command:
+      - "./daprd"
+      - "-app-id"
+      - "onboarding"
+      - "-app-port"
+      - "8080"
+      - "-dapr-grpc-port"
+      - "50001"
+      - "-placement-host-address"
+      - "placement:50006"
+      - "-scheduler-host-address"
+      - "scheduler:50007"
+      - "-log-level"
+      - "info"
+    # Note: -resources-path intentionally omitted; onboarding only uses Dapr
+    # Workflow, not pub/sub or state stores. See base docker-compose.yml for
+    # the full rationale.
+    depends_on:
+      onboarding:
+        condition: service_started
+    network_mode: "service:onboarding"

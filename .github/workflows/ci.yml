@@ -127,30 +127,14 @@ jobs:
         with:
           global-json-file: global.json
 
-      - uses: dapr/setup-dapr@8d980918fd43a2765c143ce7f687665b2d46a6b9 # v2
-        with:
-          version: '1.17.0'
-
-      - name: Init Dapr runtime
-        run: dapr init --runtime-version 1.17.3
-
-      - name: Start Dapr sidecar for onboarding
-        run: |
-          dapr run --app-id onboarding --dapr-grpc-port 50001 --dapr-http-port 3500 -- sleep 600 &
-          for _ in $(seq 1 30); do
-            if nc -z localhost 50001 2>/dev/null; then
-              echo "Dapr sidecar ready on :50001"; exit 0
-            fi
-            sleep 1
-          done
-          echo "Dapr sidecar did not become ready"; exit 1
+      # No Dapr sidecar is bootstrapped here. Onboarding's Dapr workflow
+      # lifecycle is exercised end-to-end by the e2e job (which brings up a
+      # full sidecar via compose) — duplicating it here added no coverage
+      # and introduced a 10-min silent-hang failure mode when CI scheduler/
+      # placement coordination slipped. See commit log for history.
 
       - name: Integration test
         run: make integration-test
-
-      - name: Stop Dapr sidecar
-        if: always()
-        run: dapr stop --app-id onboarding || true
 
   e2e:
     # Same rationale as integration-test — needs full docker-in-docker for

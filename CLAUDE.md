@@ -14,14 +14,16 @@
 make deps          # Verify required tools (go, dotnet, docker)
 make build             # Build all services
 make test              # Run unit tests (Go + .NET, fast, no Docker)
-make integration-test  # Integration tests (Testcontainers Postgres + RabbitMQ; requires Docker)
+make integration-test  # Integration tests (.NET: TUnit via `dotnet run` + Testcontainers Postgres/RabbitMQ; Go: //go:build integration)
 make e2e               # End-to-end tests via Docker Compose (self-contained e2e/docker-compose.e2e.yml)
 make lint              # Run linters (golangci-lint + dotnet format --verify + hadolint)
 make lint-ci           # Lint GitHub Actions workflows (actionlint + shellcheck)
 make vulncheck         # Run vulnerability scanners (govulncheck + dotnet list package --vulnerable)
 make trivy-fs          # Trivy filesystem scan (CVEs + secrets + misconfigs)
 make secrets           # Gitleaks scan for leaked secrets
-make static-check      # Composite quality gate (lint-ci + lint + vulncheck + secrets + trivy-fs + deps-prune-check)
+make diagrams          # Render C4-PlantUML sources under docs/diagrams/ to PNG
+make diagrams-check    # Verify committed PNGs match .puml sources (CI drift gate)
+make static-check      # Composite quality gate (lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
 make format        # Auto-fix formatting (Go + .NET)
 make clean         # Remove build artifacts
 make ci            # Full local CI pipeline (format, static-check, test, build)
@@ -43,45 +45,62 @@ make ci-run        # Run GitHub Actions locally via act (randomized artifact por
 | `SHELLCHECK_VERSION` | `0.11.0` | Pinned shellcheck (required by actionlint to lint `run:` blocks) |
 | `KIND_VERSION` | `0.25.0` | Pinned KinD version for `make e2e-kind` scaffolding |
 | `KIND_NODE_IMAGE` | `kindest/node:v1.31.2` | KinD node image paired with `KIND_VERSION` |
+| `PLANTUML_VERSION` | `1.2026.2` | Pinned PlantUML Docker image for `make diagrams` (C4 rendering) |
 | `NODE_VERSION` | `$(shell cat .nvmrc)` | Node major version sourced from `.nvmrc` (mise reads natively) |
 | `GO_SERVICES` | `basket-service onboarding` | Go service directories |
 | `DOTNET_SERVICES` | `order-service product-service` | .NET service directories |
+| `DOTNET_TEST_PROJECTS` | `product-service.IntegrationTests order-service.IntegrationTests` | TUnit test projects run via `dotnet run --project` |
 
 Version manager: **mise** (installed via `make deps-mise` / `renovate-bootstrap`). NVM has been removed per the portfolio-wide Version Manager Policy. User-local tool installs (`act`, `hadolint`, `govulncheck`) target `$HOME/.local/bin` — no `sudo` required.
 
 ## Project Structure
 
-```
-basket-service/    # Go service
-onboarding/        # Go service
-order-service/     # .NET service (with Dockerfile)
-product-service/   # .NET service (with Dockerfile)
-dapr-go-poly.slnx  # .NET solution file (modern XML format)
-docker-compose.yml # Local orchestration
-global.json        # .NET SDK version pin
-renovate.json      # Renovate dependency update configuration
+```text
+basket-service/                      # Go service (Fiber; routes WIP)
+onboarding/                          # Go service (Dapr Workflow: approve/deny)
+order-service/                       # .NET 10 service (EF Core + RabbitMQ consumer)
+product-service/                     # .NET 10 service (EF Core / Postgres)
+order-service.IntegrationTests/      # TUnit + Testcontainers (Postgres + RabbitMQ)
+product-service.IntegrationTests/    # TUnit + Testcontainers (Postgres)
+e2e/
+  docker-compose.e2e.yml             # Self-contained e2e stack
+  e2e-test.sh                        # curl-based e2e assertions
+  k8s/README.md                      # KinD e2e scaffolding notes
+docs/diagrams/                       # C4-PlantUML sources + rendered PNGs
+.mise.toml                           # Project-local Go pin (matches go.mod)
+.golangci.yml                        # Go lint config (gocritic/gosec/etc.)
+.trivyignore                         # Trivy suppressions (with justification)
+dapr-go-poly.slnx                    # .NET solution file (modern XML format)
+docker-compose.yml                   # Base compose (Dapr + Postgres + RabbitMQ + services)
+global.json                          # .NET SDK version pin
+renovate.json                        # Renovate dependency update configuration
+LICENSE                              # MIT
 ```
 
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to `main`, tags `v*`, pull requests, and `workflow_call` (paths-ignore: `**/*.md`, `docs/**`, `LICENSE`, `.gitignore`):
-- **static-check** job: Checkout, Set up Go, Set up .NET, `make static-check`
+- **static-check** job: Checkout, Set up Go, Set up .NET, `make static-check` (lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
 - **build** job (needs static-check): Checkout, Set up Go, Set up .NET, `make build`
 - **test** job (needs static-check): Checkout, Set up Go, Set up .NET, `make test`
+- **integration-test** job (needs static-check; skipped under act via `vars.ACT`): Set up Go/.NET + `dapr/setup-dapr@v2`, start Dapr sidecar, `make integration-test` (TUnit + Testcontainers)
+- **e2e** job (needs build + test; skipped under act): `make e2e` (Docker Compose overlay + curl suite); captures compose logs on failure
 - **docker** job (needs static-check + build + test): Checkout, Set up .NET, `make image-build` (step-level `if` gates on tag `v*`)
-- **ci-pass** job (aggregator, `if: always()`): Verifies all upstream jobs passed — use as branch-protection required check
+- **ci-pass** job (aggregator, `if: always()`): Verifies all upstream jobs passed (treats `skipped` as pass) — use as branch-protection required check
 
 A cleanup workflow (`.github/workflows/cleanup-runs.yml`) removes old workflow runs weekly (also supports `workflow_dispatch`).
 
 ## Development Conventions
 
-- Go services use standard `go build` / `go test` toolchain
+- Go services use standard `go build` / `go test` toolchain; `golangci-lint` config in `.golangci.yml` enables gocritic/gosec/errorlint/bodyclose/noctx/misspell
 - .NET services use `dotnet build` / `dotnet format` with `TreatWarningsAsErrors` enabled
+- **.NET tests use TUnit** (portfolio-wide hard requirement per `rules/dotnet/testing.md`). Run via `dotnet run --project <TestProject>` (native Microsoft.Testing.Platform entry point), NOT `dotnet test`. Fixtures use `[ClassDataSource<T>(Shared = SharedType.PerClass)]` + `IAsyncInitializer`/`IAsyncDisposable`. Assertions are async — always `await Assert.That(...)`. Mocking: FakeItEasy
+- C4 architecture diagrams (`docs/diagrams/*.puml`) are rendered to PNG via the pinned `plantuml/plantuml` Docker image; `make diagrams-check` is wired into `static-check` so stale committed output fails CI
 - Docker images built with `docker buildx`
 - Dockerfiles linted with hadolint via `make lint`
 - Dapr CLI version pinned as `DAPR_VERSION` in Makefile — always use a specific version, never `latest`
 - All Makefile `_VERSION` constants carry `# renovate:` inline comments; a single generic `customManagers` regex in `renovate.json` tracks them all — no per-tool config drift
-- User-local tool installs (`act`, `hadolint`, `govulncheck`) target `$HOME/.local/bin`; `export PATH` at the top of the Makefile makes them usable in the same `make` invocation
+- User-local tool installs (`act`, `hadolint`, `govulncheck`, `trivy`, `gitleaks`, `actionlint`, `shellcheck`, `kind`) target `$HOME/.local/bin`; `export PATH` at the top of the Makefile makes them usable in the same `make` invocation
 
 ## Skills
 

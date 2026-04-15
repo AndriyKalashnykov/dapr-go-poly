@@ -1,11 +1,5 @@
 services:
 
-#  redis:
-#    image: redis:latest
-#    ports:
-#      - "6379:6379"
-#    restart: on-failure
-
   placement:
     # https://github.com/dapr/dapr/pkgs/container/daprd/versions?filters%5Bversion_type%5D=tagged
     # daprio uses http by default, whyle ghcr.io uses https, can be helpful in environments with "man in the middle" Netscope etc.
@@ -18,177 +12,161 @@ services:
       - "50006:50006"
 
   scheduler:
-    user: "1000"
+    # Container uses image-default user to avoid bind/volume perms coupling.
     image: "daprio/dapr:1.17.3@sha256:b0a7b27b928906230acd2b061306a8f4aa09ee36a27beb5627ab3f05514d7da4"
+    # Flag changes in Dapr 1.17.3:
+    #   --replica-count       → removed (standalone is default)
+    #   --etcd-client-ports   → --etcd-client-port (single uint, no per-instance mapping)
+    #   --etcd-client-http-ports → removed
+    #   --initial-cluster     → --etcd-initial-cluster
     command: [
       "./scheduler",
       "--port", "50007",
       "--id","scheduler-0",
-      "--replica-count", "1",
       "--etcd-data-dir", "/var/run/dapr/scheduler",
-      "--etcd-client-ports", "scheduler-0=2379",
-      "--etcd-client-http-ports", "scheduler-0=2330",
-      "--initial-cluster", "scheduler-0=http://scheduler-0:2380",
+      "--etcd-initial-cluster", "scheduler-0=http://scheduler-0:2380",
     ]
     ports:
       - "50007:50007"
-    volumes:
-      - ./.dapr_scheduler/0:/var/run/dapr/scheduler:rw # Scheduler state persisted across restarts
-#      - type: tmpfs # WARNING - Scheduler state will not be persisted across restarts
-#        target: /var/run/dapr/scheduler
+    # The dapr image runs as nonroot (UID 65532) so host bind mounts and
+    # default named volumes (both root-owned) can't be written to. A tmpfs
+    # keeps scheduler state ephemeral — acceptable for local dev since Dapr
+    # workflow/job state is recreated on each bring-up. To persist across
+    # restarts, wire a named volume with explicit UID ownership.
+    tmpfs:
+      - /var/run/dapr/scheduler
     depends_on:
       placement:
         condition: service_started
 
-#  dapr-dashboard:
-#    image: "ghcr.io/dapr/dashboard"
-#    command: [ "--docker-compose=true",
-#               "--components-path=/home/nonroot/components",
-#               "--config-path=/home/nonroot/configuration",
-#               "--docker-compose-path=/home/nonroot/docker-compose.yml" ]
-#    ports:
-#      - "9090:8080"
-#    volumes:
-#      - "./.iac/dapr/local/components/:/home/nonroot/components"
-#      - "./.iac/dapr/local/:/home/nonroot/configuration"
-#      - "./docker-compose.yml:/home/nonroot/docker-compose.yml"
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: product
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
 
-#  zipkin:
-#    image: openzipkin/zipkin
-#    container_name: tracing_zipkin
-#    restart: always
-#    ports:
-#      - "9411:9411"
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
 
-#  postgres:
-#    image: postgres:17
-#    ports:
-#      - "5432:5432"
-#    environment:
-#      POSTGRES_USER: postgres
-#      POSTGRES_PASSWORD: test
-#      POSTGRES_DB: product
-#    volumes:
-#      - ./.postgres_data:/var/lib/postgresql/data # Create in current directory
-#    healthcheck:
-#      test: ["CMD-SHELL", "pg_isready -d product -U postgres"]
-#      interval: 1s
-#      timeout: 5s
-#      retries: 10
-#    restart: on-failure
-#
-#  product-service:
-#    image: product-service
-#    build:
-#      context: ./product-service
-#      dockerfile: Dockerfile
-#    ports:
-#      - "1000:8080"
-#      - "50008:50008"
-#    restart: on-failure
-#    environment:
-#      POSTGRES_HOST: postgres
-#      POSTGRES_PORT: 5432
-#      POSTGRES_DATABASE: product
-#      POSTGRES_USERNAME: postgres
-#      POSTGRES_PASSWORD: test
-#    depends_on:
-#      placement:
-#        condition: service_started
-#      scheduler:
-#        condition: service_started
-#      postgres:
-#        condition: service_healthy
-#
-#  product-service-dapr:
-#    image: "daprio/daprd"
-#    command:
-#      [
-#        "./daprd",
-#        "-app-id", "product-service",
-#        "-app-port","8080",
-#        "-placement-host-address", "host.docker.internal:50006",
-#        "-config", "/configuration/config.yaml",
-#        "-log-level", "debug"
-#      ]
-#    volumes:
-#      - "./.iac/dapr/local/:/configuration"
-#      # - "./.iac/dapr/local/components/:/components"
-#    depends_on:
-#      product-service:
-#        condition: service_started
-#    network_mode: "service:product-service"
-#
-#  order-service:
-#    image: order-service
-#    build:
-#      context: ./order-service
-#      dockerfile: Dockerfile
-#    ports:
-#      - "1001:8080"
-#      - "50009:50009"
-#    restart: on-failure
-#    environment:
-#      POSTGRES_HOST: postgres
-#      POSTGRES_PORT: 5432
-#      POSTGRES_DATABASE: product
-#      POSTGRES_USERNAME: postgres
-#      POSTGRES_PASSWORD: test
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#
-#  order-service-dapr:
-#    image: "daprio/daprd"
-#    command:
-#      [
-#        "./daprd",
-#        "-app-id","order-service",
-#        "-app-port","8080",
-#        "-placement-host-address","host.docker.internal:50006",
-#        "-config", "/configuration/config.yaml",
-#        "-log-level", "debug"
-#      ]
-#    volumes:
-#      - "./.iac/dapr/local/:/configuration"
-#      # - "./.iac/dapr/local/components/:/components"
-#    depends_on:
-#      product-service:
-#        condition: service_started
-#    network_mode: "service:order-service"
+  product-service:
+    build:
+      context: ./product-service
+      dockerfile: Dockerfile
+    ports:
+      - "1000:8080"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: product
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: test
+      ASPNETCORE_URLS: http://+:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      placement:
+        condition: service_started
+      scheduler:
+        condition: service_started
 
+  product-service-dapr:
+    image: "daprio/daprd:1.17.3"
+    command:
+      - "./daprd"
+      - "-app-id"
+      - "product-service"
+      - "-app-port"
+      - "8080"
+      - "-placement-host-address"
+      - "placement:50006"
+      - "-scheduler-host-address"
+      - "scheduler:50007"
+      - "-log-level"
+      - "info"
+    # Note: -resources-path intentionally omitted. The components under
+    # .iac/dapr/local/components/ point at a K8s in-cluster Redis which won't
+    # resolve here. Local compose supports service invocation without loading
+    # pubsub/state components. Add Redis and re-enable the resources path when
+    # you want to exercise those building blocks locally.
+    depends_on:
+      product-service:
+        condition: service_started
+    network_mode: "service:product-service"
 
-  # rabbitmq:
-  #   image: rabbitmq:3-management-alpine
-  #   environment:
-  #     - RABBITMQ_DEFAULT_USER=guest
-  #     - RABBITMQ_DEFAULT_PASS=guest
-  #   ports:
-  #     - 5672:5672
-  #     - 15672:15672
-  #   restart: on-failure
+  order-service:
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    ports:
+      - "1001:8080"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: order
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: test
+      PRODUCT_SERVICE_BASE_URL: http://product-service:8080
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+      ASPNETCORE_URLS: http://+:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      placement:
+        condition: service_started
+      scheduler:
+        condition: service_started
+      product-service:
+        condition: service_started
 
-#  otel-collector:
-#    image: otel/opentelemetry-collector:latest
-#    command: ["--config=/etc/otel-collector-config.yaml"]
-#    volumes:
-#      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
-#      - ./output:/etc/output:rw # Store the logs
-#    ports:
-#      - "4317:4317"
-#      - "8888:8888"   # Prometheus metrics exposed by the collector
-#      - "8889:8889"   # Prometheus exporter metrics
-#    depends_on:
-#      - jaeger
-#  jaeger:
-#    container_name: jaeger
-#    image: jaegertracing/all-in-one
-#    ports:
-#      - "16686:16686"
-#      - "14250"
-#
-#  prometheus:
-#    container_name: prometheus
-#    image: prom/prometheus:latest
-#    ports:
-#      - "9090:9090"
+  order-service-dapr:
+    image: "daprio/daprd:1.17.3"
+    command:
+      - "./daprd"
+      - "-app-id"
+      - "order-service"
+      - "-app-port"
+      - "8080"
+      - "-placement-host-address"
+      - "placement:50006"
+      - "-scheduler-host-address"
+      - "scheduler:50007"
+      - "-log-level"
+      - "info"
+    # Note: -resources-path intentionally omitted. The components under
+    # .iac/dapr/local/components/ point at a K8s in-cluster Redis which won't
+    # resolve here. Local compose supports service invocation without loading
+    # pubsub/state components. Add Redis and re-enable the resources path when
+    # you want to exercise those building blocks locally.
+    depends_on:
+      order-service:
+        condition: service_started
+    network_mode: "service:order-service"
+
+volumes:
+  postgres_data:

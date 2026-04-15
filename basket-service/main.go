@@ -1,13 +1,10 @@
 package main
 
 import (
-	"context"
 	"log"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
-
-	dapr "github.com/dapr/go-sdk/client"
 )
 
 type Basket struct {
@@ -40,27 +37,13 @@ type ProductResponse struct {
 
 func main() {
 	app := fiber.New()
-	ctx := context.Background()
 
-	client, err := dapr.NewClient()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// basketSchema := schema.Object(map[string]schema.ISchema{
-	// 	"Items": schema.Array(schema.Object(map[string]schema.ISchema{
-	// 		"ProductId": schema.UUID().Refine(func(productId uuid.UUID) bool {
-	// 			_, err := client.InvokeMethod(ctx, "product-service", fmt.Sprintf("/api/products/%s", productId.String()), "GET")
-	// 			return err != nil
-	// 		}),
-	// 		"Quantity":  schema.Int().Gt(0),
-	// 	})).Min(1),
-	// })
-
-	data, err := client.InvokeMethod(ctx, "product-service", "/api/products/72119506-89ef-4c0c-ace7-6cbd984bfc50", "GET")
-
-	log.Printf("%v", err)
-	log.Printf("%v", data)
+	// NOTE: Routes are WIP (commented out below). The Dapr client was
+	// previously instantiated and a blocking InvokeMethod call fired at
+	// startup; if product-service was unreachable, basket-service hung
+	// forever before Listen(). Both have been removed until the routes are
+	// activated — at which point the Dapr client should be injected into
+	// the route handlers, not created eagerly in main().
 
 	// app.Get("/api/basket/:id", func(c fiber.Ctx) error {
 	// 	id, err := uuid.Parse(c.Params("id"))
@@ -183,5 +166,7 @@ func main() {
 	// 	return c.SendStatus(fiber.StatusNoContent)
 	// })
 
-	app.Listen(":8080")
+	if err := app.Listen(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }

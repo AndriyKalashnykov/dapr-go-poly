@@ -4,7 +4,17 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
   workflow_call:
 
 permissions:
@@ -18,41 +28,35 @@ jobs:
 
   static-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version-file: basket-service/go.mod
           cache: true
 
-      - name: Install .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
 
-      - name: Lint
-        run: make lint
+      - name: Static check
+        run: make static-check
 
   build:
     needs: [static-check]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version-file: basket-service/go.mod
           cache: true
 
-      - name: Install .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
 
@@ -64,36 +68,113 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version-file: basket-service/go.mod
           cache: true
 
-      - name: Install .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
 
       - name: Test
         run: make test
 
-  docker:
-    needs: [build]
-    if: startsWith(github.ref, 'refs/tags/')
+  integration-test:
+    # Skipped when running under act (local CI simulator). Testcontainers
+    # spawns sibling docker containers from within the job runner, which
+    # requires host-docker-socket + docker-in-docker semantics that act
+    # emulates poorly. Ran by real GitHub Actions runners where it works.
+    if: ${{ vars.ACT != 'true' }}
+    needs: [static-check]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: basket-service/go.mod
+          cache: true
+
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
 
-      - name: Image Build
+      - uses: dapr/setup-dapr@8d980918fd43a2765c143ce7f687665b2d46a6b9 # v2
+        with:
+          version: '1.17.0'
+
+      - name: Init Dapr runtime
+        run: dapr init --runtime-version 1.17.3
+
+      - name: Start Dapr sidecar for onboarding
+        run: |
+          dapr run --app-id onboarding --dapr-grpc-port 50001 --dapr-http-port 3500 -- sleep 600 &
+          for _ in $(seq 1 30); do
+            if nc -z localhost 50001 2>/dev/null; then
+              echo "Dapr sidecar ready on :50001"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Dapr sidecar did not become ready"; exit 1
+
+      - name: Integration test
+        run: make integration-test
+
+      - name: Stop Dapr sidecar
+        if: always()
+        run: dapr stop --app-id onboarding || true
+
+  e2e:
+    # Same rationale as integration-test — needs full docker-in-docker for
+    # compose up, which act cannot provide without privileged socket mounts.
+    if: ${{ vars.ACT != 'true' }}
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends jq
+
+      - name: E2E (Docker Compose overlay)
+        run: make e2e
+
+      - name: Capture compose logs on failure
+        if: failure()
+        run: docker compose -f e2e/docker-compose.e2e.yml logs --tail=200 || true
+
+  docker:
+    needs: [static-check, build, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
+        with:
+          global-json-file: global.json
+
+      - name: Build image
+        if: startsWith(github.ref, 'refs/tags/')
         run: make image-build
+
+  ci-pass:
+    # Mirror the gating of integration-test/e2e so ci-pass can still succeed
+    # under act (where those two jobs are intentionally skipped).
+    if: ${{ always() }}
+    needs: [static-check, build, test, integration-test, e2e, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all upstream jobs passed
+        run: |
+          # Treat 'skipped' as pass (integration-test + e2e are skipped under act).
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more upstream jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "All upstream jobs passed (or were intentionally skipped)."

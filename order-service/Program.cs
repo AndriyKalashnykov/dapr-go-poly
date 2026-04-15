@@ -1,5 +1,3 @@
-using System.Reflection;
-using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,8 +12,6 @@ string connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Userna
 
 builder.Services.AddDbContext<OrderContext>(options => options.UseNpgsql(connectionString));
 
-builder.Services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
-
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -23,6 +19,11 @@ builder.Services.AddHttpClient<IProductsClient, ProductsClient>(client =>
 {
     client.BaseAddress = new Uri(Environment.GetEnvironmentVariable("PRODUCT_SERVICE_BASE_URL") ?? "");
 });
+
+// OrdersConsumer is a BackgroundService that consumes from RabbitMQ "orders"
+// queue and persists Orders to Postgres. It declares the queue on startup,
+// so must be registered as a HostedService for the async pipeline to run.
+builder.Services.AddHostedService<OrdersConsumer>();
 
 var app = builder.Build();
 
@@ -42,3 +43,5 @@ app.UseStatusCodePages(async statusCodeContext
 app.MapGet("/api/orders", (OrderContext db) => db.Orders.ToListAsync());
 
 app.Run();
+
+public partial class Program { }

@@ -1,0 +1,6 @@
+# Project-local mise config. Pins Go to the version declared in go.mod so all
+# contributors (and CI, via its own actions/setup-go) converge on one version.
+# Without this file, mise falls back to the user-global config, which drifts.
+[tools]
+# renovate: datasource=golang-version depName=go
+go = "1.26.2"

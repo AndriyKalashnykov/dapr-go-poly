@@ -78,7 +78,13 @@ public class OrdersConsumer : BackgroundService
                 autoAck: true,
                 consumer: consumer);
 
-            await Task.CompletedTask;
+            // Keep connection/channel alive until shutdown; without this the
+            // `using` scopes dispose them immediately and no messages flow.
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected on graceful shutdown.
         }
         catch (Exception ex)
         {

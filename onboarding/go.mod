@@ -1,6 +1,6 @@
 module github.com/AndriyKalashnykov/dapr-go-poly/onboarding
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/dapr/durabletask-go v0.11.3

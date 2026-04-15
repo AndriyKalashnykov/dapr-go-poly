@@ -1,0 +1,11 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="order-service.IntegrationTests/order-service.IntegrationTests.csproj" />
+  <Project Path="order-service/order-service.csproj" />
+  <Project Path="product-service.IntegrationTests/product-service.IntegrationTests.csproj" />
+  <Project Path="product-service/product-service.csproj" />
+</Solution>

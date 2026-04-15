@@ -91,3 +91,5 @@ app.MapDelete("/api/products/{id}", async (ProductContext db, Guid id) =>
 
 
 app.Run();
+
+public partial class Program { }

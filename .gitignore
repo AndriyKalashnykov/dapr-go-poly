@@ -30,5 +30,9 @@ vendor
 *bin/
 *obj/
 *main
+# Per-service Go binaries (go build ./... writes to the pkg dir when -o is
+# omitted, which defaults to the directory name — e.g., `basket-service/basket-service`).
+/basket-service/basket-service
+/onboarding/onboarding
 *.dapr_scheduler/
 

@@ -1,0 +1,11 @@
+# google.golang.org/grpc v1.79.2 — auth bypass (fixed in v1.79.3).
+#
+# Why suppressed:
+#   Indirect dependency pulled via github.com/dapr/go-sdk. Our code does not
+#   call the affected grpc/authz path. Resolution is upstream — the Dapr Go
+#   SDK needs to bump grpc to v1.79.3+.
+#
+# Monitoring: tracked in CLAUDE.md "Monitoring Checklist". Remove this
+# suppression once `go list -m google.golang.org/grpc` reports v1.79.3 or
+# later in either basket-service or onboarding.
+CVE-2026-33186

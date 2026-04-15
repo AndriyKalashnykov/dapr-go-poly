@@ -57,14 +57,15 @@ Version manager: **mise** (installed via `make deps-mise` / `renovate-bootstrap`
 
 ```text
 basket-service/                      # Go service (Fiber; routes WIP)
-onboarding/                          # Go service (Dapr Workflow: approve/deny)
+onboarding/                          # Go service (Dapr Workflow: async POST 202 + GET status + approve/deny)
 order-service/                       # .NET 10 service (EF Core + RabbitMQ consumer)
 product-service/                     # .NET 10 service (EF Core / Postgres)
 order-service.IntegrationTests/      # TUnit + Testcontainers (Postgres + RabbitMQ)
 product-service.IntegrationTests/    # TUnit + Testcontainers (Postgres)
 e2e/
-  docker-compose.e2e.yml             # Self-contained e2e stack
-  e2e-test.sh                        # curl-based e2e assertions
+  docker-compose.e2e.yml             # Self-contained e2e stack (incl. Redis + Dapr control plane for onboarding workflow)
+  dapr/components/statestore.yaml    # Dapr state store component (Redis, actorStateStore=true)
+  e2e-test.sh                        # curl-based e2e assertions (21 assertions covering all 3 services + onboarding async workflow lifecycle)
   k8s/README.md                      # KinD e2e scaffolding notes
 docs/diagrams/                       # C4-PlantUML sources + rendered PNGs
 .mise.toml                           # Project-local Go pin (matches go.mod)
@@ -84,7 +85,7 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to `main`, tag
 - **build** job (needs static-check): Checkout, Set up Go, Set up .NET, `make build`
 - **test** job (needs static-check): Checkout, Set up Go, Set up .NET, `make test`
 - **integration-test** job (needs static-check; skipped under act via `vars.ACT`): Set up Go/.NET, `make integration-test` (TUnit + Testcontainers). No Dapr sidecar — onboarding's Dapr workflow lifecycle is exercised by the e2e job instead
-- **e2e** job (needs build + test; skipped under act): `make e2e` (Docker Compose overlay + curl suite); captures compose logs on failure
+- **e2e** job (needs build + test; skipped under act): `make e2e` — brings up 9 containers (Dapr control plane + Redis state store + postgres + rabbitmq + 3 app services + onboarding sidecar), runs 21 curl-based assertions including the full onboarding async workflow lifecycle (POST 202 → approve/deny → poll GET status), captures compose logs on failure
 - **docker** job (needs static-check + build + test): Checkout, Set up .NET, `make image-build` (step-level `if` gates on tag `v*`)
 - **ci-pass** job (aggregator, `if: always()`): Verifies all upstream jobs passed (treats `skipped` as pass) — use as branch-protection required check
 

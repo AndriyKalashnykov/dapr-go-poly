@@ -253,25 +253,92 @@ else
 fi
 
 # ------------------------------------------------------------------
-# Layer 6 — onboarding approve/deny error paths
+# Layer 6 — onboarding async workflow: happy path + error paths
 # ------------------------------------------------------------------
-# The real happy-path flow (POST /onboarding → approve → get fullname) is
-# currently not testable via pure HTTP because handleCreateOnboarding blocks
-# until completion and never returns the workflow runID to the caller. The
-# runID is required to address the approve/deny endpoints. Options on the
-# table for full flow coverage (tracked as iterations B + C of this work):
-#   - Add `?id=<known>` query param to POST /onboarding so a caller can
-#     choose the workflow instance ID up-front (iteration B).
-#   - Refactor POST /onboarding to return 202 { "id": "..." } and add a
-#     GET /onboardings/{id}/status endpoint (iteration C; supersedes B).
-# For now we verify the approve/deny handlers correctly surface the Dapr
-# sidecar's "instance not found" error as a 502, which proves the sidecar
-# wiring end-to-end without needing to know a live runID.
+# POST /onboarding returns 202 { id, status: "Running" } immediately. The
+# caller raises the approval event via /onboardings/{id}/approve and polls
+# GET /onboardings/{id} for completion. See onboarding/README.md for the
+# rationale for the async shape.
 
 echo
-echo "--- onboarding approve/deny error paths ---"
+echo "--- onboarding: async API error paths ---"
 assert_status POST "$ONBOARDING_BASE/onboardings/e2e-no-such-instance/approve" "502"
 assert_status POST "$ONBOARDING_BASE/onboardings/e2e-no-such-instance/deny"    "502"
+# NOTE: `GET /onboardings/<unknown-id>` is deliberately NOT asserted here.
+# Dapr 1.17.3 has a nil-pointer dereference in
+# backend.(*grpcExecutor).GetInstance when queried for a workflow instance
+# that was never scheduled (durabletask-go). The sidecar panics and becomes
+# unreachable for the rest of the run. Track upstream:
+#   https://github.com/dapr/durabletask-go/issues
+# Remove the NOTE and add the assertion once 1.17.4+ ships with a fix.
+
+echo
+echo "--- onboarding: approved happy path ---"
+
+create_resp=$(curl -sf -X POST -H 'Content-Type: application/json' \
+  -d '{"firstname":"E2E","lastname":"Widget","email":"e2e@example.com"}' \
+  "$ONBOARDING_BASE/onboarding")
+onboard_id=$(echo "$create_resp" | jq -r '.id')
+
+if [[ -z "$onboard_id" || "$onboard_id" == "null" ]]; then
+  log_fail "POST /onboarding did not return id. Body: $create_resp"
+else
+  log_pass "POST /onboarding → 202 { id=$onboard_id, status=Running }"
+fi
+
+assert_status POST "$ONBOARDING_BASE/onboardings/$onboard_id/approve" "200"
+
+deadline=$((SECONDS + 30))
+result=""
+while (( SECONDS < deadline )); do
+  state=$(curl -sf "$ONBOARDING_BASE/onboardings/$onboard_id" 2>/dev/null || echo "{}")
+  status=$(echo "$state" | jq -r '.status // empty')
+  if [[ "$status" == "Completed" ]]; then
+    result=$(echo "$state" | jq -r '.result // empty')
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$result" == "E2E Widget" ]]; then
+  log_pass "Workflow $onboard_id completed with result=\"E2E Widget\""
+else
+  log_fail "Workflow $onboard_id did not complete with expected result within 30s (got status=\"$status\", result=\"$result\")"
+fi
+
+echo
+echo "--- onboarding: denied path produces Failed status ---"
+
+denied_resp=$(curl -sf -X POST -H 'Content-Type: application/json' \
+  -d '{"firstname":"Denied","lastname":"Case","email":"deny@example.com"}' \
+  "$ONBOARDING_BASE/onboarding")
+denied_id=$(echo "$denied_resp" | jq -r '.id')
+
+if [[ -z "$denied_id" || "$denied_id" == "null" ]]; then
+  log_fail "POST /onboarding did not return id for deny test. Body: $denied_resp"
+else
+  assert_status POST "$ONBOARDING_BASE/onboardings/$denied_id/deny" "200"
+
+  deadline=$((SECONDS + 30))
+  final_status=""
+  final_error=""
+  while (( SECONDS < deadline )); do
+    state=$(curl -sf "$ONBOARDING_BASE/onboardings/$denied_id" 2>/dev/null || echo "{}")
+    status=$(echo "$state" | jq -r '.status // empty')
+    if [[ "$status" == "Failed" || "$status" == "Completed" ]]; then
+      final_status="$status"
+      final_error=$(echo "$state" | jq -r '.error // empty')
+      break
+    fi
+    sleep 1
+  done
+
+  if [[ "$final_status" == "Failed" && "$final_error" == *"not approved"* ]]; then
+    log_pass "Denied workflow $denied_id reached Failed status with expected error"
+  else
+    log_fail "Denied workflow $denied_id: expected Failed + 'not approved' error, got status=\"$final_status\" error=\"$final_error\""
+  fi
+fi
 
 # ------------------------------------------------------------------
 # Cleanup

@@ -25,8 +25,11 @@ map for "what needs to end up as manifests."
 ## When you're ready to land it
 
 1. **Manifests under `e2e/k8s/`** — `Deployment` + `Service` for each of
-   `product-service`, `order-service`, `postgres`, `rabbitmq`; Dapr sidecar
-   injection via `dapr.io/enabled: "true"` + `dapr.io/app-id` pod annotations.
+   `product-service`, `order-service`, `onboarding`, `postgres`, `rabbitmq`,
+   `redis`; Dapr sidecar injection via `dapr.io/enabled: "true"` +
+   `dapr.io/app-id` pod annotations. Only `onboarding` currently uses the
+   Dapr workflow engine and therefore requires the actor state store wired
+   in (see (3) below).
 2. **LoadBalancer controller** — **default: `cloud-provider-kind`** (one
    `docker run` on the kind Docker network; kind-team maintained, zero
    in-cluster footprint). Opt into MetalLB instead only if prod parity with
@@ -35,9 +38,13 @@ map for "what needs to end up as manifests."
    "Kubernetes Targets (KinD + cloud-provider-kind)".
 3. **Components** — Dapr state/pubsub `Component` resources pointing at an
    in-cluster Redis (or whichever backend you pick), applied via
-   `kubectl apply -f` or a Kustomization. The existing
-   `.iac/dapr/local/components/` files can be migrated once they're pointed at
-   in-cluster DNS names instead of `redis-master.dapr-go.svc.cluster.local`.
+   `kubectl apply -f` or a Kustomization. The **compose-level equivalent
+   already exists** at [`../dapr/components/statestore.yaml`](../dapr/components/statestore.yaml)
+   (Redis backend, `actorStateStore: true` — required by Dapr Workflow for
+   the onboarding service). That file is the template to mirror for the K8s
+   `Component` CR; swap `redisHost: redis:6379` for the in-cluster Redis
+   Service DNS name. The legacy `.iac/dapr/local/components/` files can be
+   deleted or re-pointed to follow suit.
 4. **Test script** — `e2e/k8s-test.sh` similar in shape to
    [`../e2e-test.sh`](../e2e-test.sh) but pointing at the LoadBalancer IP
    instead of `localhost`. The compose-based script is a good template —

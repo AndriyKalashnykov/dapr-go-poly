@@ -68,6 +68,16 @@ services:
       timeout: 5s
       retries: 15
 
+  redis:
+    # Actor state store for Dapr Workflow. Dapr workflows require a state
+    # store with actorStateStore=true; see e2e/dapr/components/statestore.yaml.
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
   rabbitmq:
     image: rabbitmq:3-management-alpine
     environment:
@@ -145,9 +155,15 @@ services:
         condition: service_started
       scheduler:
         condition: service_started
+      redis:
+        condition: service_healthy
 
   onboarding-dapr:
     image: "daprio/daprd:1.17.3"
+    # Dapr Workflow requires an actor-capable state store; we mount a minimal
+    # Redis-backed component definition. Without -resources-path, daprd runs
+    # with zero components and ScheduleWorkflow fails with "the state store is
+    # not configured to use the actor runtime."
     command:
       - "./daprd"
       - "-app-id"
@@ -160,12 +176,15 @@ services:
       - "placement:50006"
       - "-scheduler-host-address"
       - "scheduler:50007"
+      - "-resources-path"
+      - "/dapr/components"
       - "-log-level"
       - "info"
-    # Note: -resources-path intentionally omitted; onboarding only uses Dapr
-    # Workflow, not pub/sub or state stores. See base docker-compose.yml for
-    # the full rationale.
+    volumes:
+      - ../e2e/dapr/components:/dapr/components:ro
     depends_on:
       onboarding:
         condition: service_started
+      redis:
+        condition: service_healthy
     network_mode: "service:onboarding"

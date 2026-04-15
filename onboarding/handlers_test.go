@@ -19,14 +19,15 @@ type fakeWorkflowClient struct {
 	scheduleID  string
 	scheduleErr error
 	raiseErr    error
-	awaitOutput string
-	awaitErr    error
+	stateReply  *WorkflowState
+	stateErr    error
 
 	// captured
 	scheduledOrchestrator string
 	scheduledInput        any
 	raisedID, raisedEvent string
 	raisedPayload         any
+	fetchedID             string
 }
 
 func (f *fakeWorkflowClient) Schedule(_ context.Context, orchestrator string, input any) (string, error) {
@@ -42,11 +43,9 @@ func (f *fakeWorkflowClient) Raise(_ context.Context, id, eventName string, payl
 	return f.raiseErr
 }
 
-func (f *fakeWorkflowClient) AwaitOutput(_ context.Context, _ string, out any) error {
-	if f.awaitErr != nil {
-		return f.awaitErr
-	}
-	return json.Unmarshal([]byte(f.awaitOutput), out)
+func (f *fakeWorkflowClient) GetState(_ context.Context, id string) (*WorkflowState, error) {
+	f.fetchedID = id
+	return f.stateReply, f.stateErr
 }
 
 // newServeMux wires a fresh mux at every call so PathValue("id") works.
@@ -54,6 +53,7 @@ func (f *fakeWorkflowClient) AwaitOutput(_ context.Context, _ string, out any) e
 func newServeMux(s *Server) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /onboarding", s.handleCreateOnboarding)
+	mux.HandleFunc("GET /onboardings/{id}", s.handleGetOnboarding)
 	mux.HandleFunc("POST /onboardings/{id}/approve", s.ApproveOnboarding)
 	mux.HandleFunc("POST /onboardings/{id}/deny", s.DenyOnboarding)
 	return mux
@@ -138,21 +138,18 @@ func TestDenyOnboarding_RaisesDenialEventAndReturnsOK(t *testing.T) {
 }
 
 // ------------------------------------------------------------------
-// handleCreateOnboarding — happy + error paths
+// handleCreateOnboarding — async 202 shape
 // ------------------------------------------------------------------
 
-func TestHandleCreateOnboarding_ScheduleAwaitAndReturnFullname(t *testing.T) {
+func TestHandleCreateOnboarding_ReturnsAcceptedWithInstanceID(t *testing.T) {
 	t.Parallel()
-	fake := &fakeWorkflowClient{
-		scheduleID:  "wf-abc",
-		awaitOutput: `"Grace Hopper"`,
-	}
+	fake := &fakeWorkflowClient{scheduleID: "wf-abc"}
 	s := NewServer(fake)
 
 	body := bytes.NewBufferString(`{"firstname":"Grace","lastname":"Hopper","email":"grace@example.com"}`)
 	rec := do(t, newServeMux(s), http.MethodPost, "/onboarding", body)
 
-	if got, want := rec.Code, http.StatusOK; got != want {
+	if got, want := rec.Code, http.StatusAccepted; got != want {
 		t.Errorf("status = %d, want %d (body: %s)", got, want, rec.Body.String())
 	}
 	if fake.scheduledOrchestrator != "OnboardingWorkflow" {
@@ -162,8 +159,19 @@ func TestHandleCreateOnboarding_ScheduleAwaitAndReturnFullname(t *testing.T) {
 	if !ok || input.Firstname != "Grace" || input.Lastname != "Hopper" {
 		t.Errorf("scheduled input = %+v (type %T), want OnboardingRequest{Firstname: Grace, Lastname: Hopper}", fake.scheduledInput, fake.scheduledInput)
 	}
-	if got, want := strings.TrimSpace(rec.Body.String()), `"Grace Hopper"`; got != want {
-		t.Errorf("body = %q, want %q", got, want)
+
+	var got WorkflowState
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v (body: %s)", err, rec.Body.String())
+	}
+	if got.ID != "wf-abc" {
+		t.Errorf("id = %q, want %q", got.ID, "wf-abc")
+	}
+	if got.Status != "Running" {
+		t.Errorf("status = %q, want %q", got.Status, "Running")
+	}
+	if got.Result != "" {
+		t.Errorf("Result should be empty on 202; got %q", got.Result)
 	}
 }
 
@@ -198,18 +206,91 @@ func TestHandleCreateOnboarding_ScheduleFailureReturns502(t *testing.T) {
 	}
 }
 
-func TestHandleCreateOnboarding_AwaitFailureReturns502(t *testing.T) {
+// ------------------------------------------------------------------
+// handleGetOnboarding — new GET /onboardings/{id}
+// ------------------------------------------------------------------
+
+func TestHandleGetOnboarding_ReturnsRunningState(t *testing.T) {
 	t.Parallel()
-	fake := &fakeWorkflowClient{
-		scheduleID: "wf-xyz",
-		awaitErr:   errors.New("workflow timed out"),
-	}
+	fake := &fakeWorkflowClient{stateReply: &WorkflowState{ID: "wf-1", Status: "Running"}}
 	s := NewServer(fake)
 
-	body := bytes.NewBufferString(`{"firstname":"X","lastname":"Y","email":"x@y.com"}`)
-	rec := do(t, newServeMux(s), http.MethodPost, "/onboarding", body)
+	rec := do(t, newServeMux(s), http.MethodGet, "/onboardings/wf-1", nil)
+
+	if got, want := rec.Code, http.StatusOK; got != want {
+		t.Errorf("status = %d, want %d", got, want)
+	}
+	if fake.fetchedID != "wf-1" {
+		t.Errorf("fetched id = %q, want %q", fake.fetchedID, "wf-1")
+	}
+	var body WorkflowState
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Status != "Running" {
+		t.Errorf("status = %q, want Running", body.Status)
+	}
+}
+
+func TestHandleGetOnboarding_ReturnsCompletedStateWithResult(t *testing.T) {
+	t.Parallel()
+	fake := &fakeWorkflowClient{stateReply: &WorkflowState{
+		ID: "wf-2", Status: "Completed", Result: "Grace Hopper",
+	}}
+	s := NewServer(fake)
+
+	rec := do(t, newServeMux(s), http.MethodGet, "/onboardings/wf-2", nil)
+
+	if got, want := rec.Code, http.StatusOK; got != want {
+		t.Errorf("status = %d, want %d", got, want)
+	}
+	var body WorkflowState
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Status != "Completed" {
+		t.Errorf("status = %q, want Completed", body.Status)
+	}
+	if body.Result != "Grace Hopper" {
+		t.Errorf("result = %q, want Grace Hopper", body.Result)
+	}
+}
+
+func TestHandleGetOnboarding_ReturnsFailedStateWithError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeWorkflowClient{stateReply: &WorkflowState{
+		ID: "wf-3", Status: "Failed", Error: "was not approved",
+	}}
+	s := NewServer(fake)
+
+	rec := do(t, newServeMux(s), http.MethodGet, "/onboardings/wf-3", nil)
+
+	if got, want := rec.Code, http.StatusOK; got != want {
+		t.Errorf("status = %d, want %d", got, want)
+	}
+	var body WorkflowState
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Status != "Failed" {
+		t.Errorf("status = %q, want Failed", body.Status)
+	}
+	if body.Error != "was not approved" {
+		t.Errorf("error = %q, want %q", body.Error, "was not approved")
+	}
+}
+
+func TestHandleGetOnboarding_ReturnsBadGatewayWhenSidecarErrors(t *testing.T) {
+	t.Parallel()
+	fake := &fakeWorkflowClient{stateErr: errors.New("instance not found")}
+	s := NewServer(fake)
+
+	rec := do(t, newServeMux(s), http.MethodGet, "/onboardings/unknown", nil)
 
 	if got, want := rec.Code, http.StatusBadGateway; got != want {
 		t.Errorf("status = %d, want %d", got, want)
+	}
+	if !strings.Contains(rec.Body.String(), "instance not found") {
+		t.Errorf("body = %q, want underlying error to be surfaced", rec.Body.String())
 	}
 }

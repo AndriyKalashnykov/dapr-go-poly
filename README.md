@@ -33,7 +33,7 @@ A few facts worth surfacing from the Container diagram:
 
 - **Cross-service fan-out:** `order-service` calls `product-service` via a plain `HttpClient` (base URL `PRODUCT_SERVICE_BASE_URL`) — not Dapr service invocation. This is exercised by `OrderValidator` integration tests + the `make e2e` compose suite.
 - **Async pipeline:** orders arrive on the RabbitMQ `orders` queue; a hosted `OrdersConsumer` BackgroundService in `order-service` persists them to Postgres. `GET /api/orders` reads the result.
-- **Dapr workflows:** `onboarding` is the only service that exercises Dapr durable workflows (approve/deny via `RaiseEvent`). Placement + scheduler are required for workflow orchestration.
+- **Dapr workflows:** `onboarding` is the only service that exercises Dapr durable workflows. Its HTTP API is async — `POST /onboarding` returns 202 with the instance id immediately; `POST /onboardings/{id}/approve` (or `/deny`) raises the external event; `GET /onboardings/{id}` returns the current state, including `result` once completed. Placement + scheduler + an actor-capable state store (Redis, per `e2e/dapr/components/statestore.yaml`) are required for workflow orchestration.
 - **`basket-service`** is a scaffold — routes are commented out pending the Dapr service-invocation pattern landing.
 
 ## Project Structure
@@ -46,8 +46,9 @@ product-service/                     # .NET service (EF Core / Postgres)
 order-service.IntegrationTests/      # TUnit + Testcontainers integration tests
 product-service.IntegrationTests/    # TUnit + Testcontainers integration tests
 e2e/
-  docker-compose.e2e.yml             # Self-contained e2e stack (Dapr control plane + backing services + all 3 app services + onboarding sidecar)
-  e2e-test.sh                        # curl-based e2e assertions
+  docker-compose.e2e.yml             # Self-contained e2e stack (Dapr control plane + Redis + postgres + rabbitmq + 3 app services + onboarding sidecar)
+  dapr/components/statestore.yaml    # Dapr state store component (Redis, actorStateStore=true — required by Dapr Workflow)
+  e2e-test.sh                        # curl-based e2e assertions (21 total)
 dapr-go-poly.slnx                    # .NET solution file (modern XML format)
 docker-compose.yml                   # Base: Dapr control plane (placement + scheduler)
 global.json                          # .NET SDK version pin
@@ -71,7 +72,7 @@ make compose-up        # bring up full stack (postgres + rabbitmq + services + D
 |-------|--------|-------|--------------|
 | **Unit** | `make test` | seconds | None — pure Go/FluentValidation logic |
 | **Integration** | `make integration-test` | tens of seconds | Testcontainers (Postgres, RabbitMQ); .NET uses [TUnit](https://github.com/thomhurst/TUnit) + `WebApplicationFactory` via `dotnet run` (Microsoft.Testing.Platform). Go integration tests are unit-test shape using a hand-rolled `workflowClient` fake — Dapr sidecar interactions are covered by e2e, not here |
-| **E2E** | `make e2e` | ~3–5 min | Self-contained `e2e/docker-compose.e2e.yml` (placement + scheduler + postgres + rabbitmq + product-service + order-service + onboarding + its Dapr sidecar). Exercises HTTP endpoints, CRUD round-trip, validation negatives, the RabbitMQ → OrdersConsumer → Postgres async pipeline, and onboarding's Dapr sidecar-backed approve/deny error paths via `e2e/e2e-test.sh` |
+| **E2E** | `make e2e` | ~3–5 min | Self-contained `e2e/docker-compose.e2e.yml` (placement + scheduler + redis + postgres + rabbitmq + product-service + order-service + onboarding + its Dapr sidecar loaded with `e2e/dapr/components/statestore.yaml`). 21 curl-based assertions covering: CRUD + validation on product-service, JSON-array reachability on order-service, RabbitMQ → OrdersConsumer → Postgres async pipeline, onboarding async approve (POST → approve → poll `GET /onboardings/{id}` until `status=Completed`), denial (POST → deny → poll until `status=Failed` + `error` contains `not approved`), and the approve/deny error paths on unknown instance ids (502 from the Dapr sidecar) |
 
 ## Prerequisites
 

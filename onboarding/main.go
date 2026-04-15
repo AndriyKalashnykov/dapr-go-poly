@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dapr/durabletask-go/api/protos"
 	"github.com/dapr/durabletask-go/workflow"
 	"github.com/dapr/go-sdk/client"
 )
@@ -20,13 +21,24 @@ import (
 type workflowClient interface {
 	Schedule(ctx context.Context, orchestrator string, input any) (id string, err error)
 	Raise(ctx context.Context, id, eventName string, payload any) error
-	AwaitOutput(ctx context.Context, id string, out any) error
+	GetState(ctx context.Context, id string) (*WorkflowState, error)
+}
+
+// WorkflowState is the externally visible projection of a Dapr workflow
+// instance. It's the body of the 202 response from POST /onboarding and the
+// body of GET /onboardings/{id}.
+type WorkflowState struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Result string `json:"result,omitempty"`
+	Error  string `json:"error,omitempty"`
 }
 
 // daprWorkflowClient adapts *workflow.Client (from dapr/durabletask-go) to
 // workflowClient. It owns the ScheduleWorkflow / RaiseEvent /
-// WaitForWorkflowCompletion / FetchWorkflowMetadata fan-out the handlers
-// used to do inline, plus the JSON-decode of the workflow output.
+// FetchWorkflowMetadata fan-out plus the JSON-decode of the workflow output
+// and translation of the Dapr runtime status enum into the simple status
+// string the HTTP API exposes.
 type daprWorkflowClient struct {
 	c *workflow.Client
 }
@@ -39,18 +51,57 @@ func (d *daprWorkflowClient) Raise(ctx context.Context, id, eventName string, pa
 	return d.c.RaiseEvent(ctx, id, eventName, workflow.WithEventPayload(payload))
 }
 
-func (d *daprWorkflowClient) AwaitOutput(ctx context.Context, id string, out any) error {
-	if _, err := d.c.WaitForWorkflowCompletion(ctx, id); err != nil {
-		return fmt.Errorf("wait completion: %w", err)
-	}
+// GetState returns the current state of a workflow without blocking. For a
+// running workflow it returns Status="Running" and empty Result/Error. For a
+// completed workflow it decodes the output into Result. For a failed workflow
+// (e.g., onboarding denied) it surfaces the FailureDetails error message.
+func (d *daprWorkflowClient) GetState(ctx context.Context, id string) (*WorkflowState, error) {
 	state, err := d.c.FetchWorkflowMetadata(ctx, id)
 	if err != nil {
-		return fmt.Errorf("fetch metadata: %w", err)
+		return nil, fmt.Errorf("fetch metadata: %w", err)
 	}
-	if state == nil || state.Output == nil {
-		return errors.New("workflow completed with no output")
+	if state == nil {
+		return nil, errors.New("workflow instance not found")
 	}
-	return json.Unmarshal([]byte(state.Output.GetValue()), out)
+
+	out := &WorkflowState{
+		ID:     id,
+		Status: normalizeRuntimeStatus(state.RuntimeStatus),
+	}
+	if state.Output != nil && state.Output.GetValue() != "" {
+		var result string
+		if err := json.Unmarshal([]byte(state.Output.GetValue()), &result); err == nil {
+			out.Result = result
+		}
+	}
+	if state.FailureDetails != nil {
+		out.Error = state.FailureDetails.GetErrorMessage()
+	}
+	return out, nil
+}
+
+// normalizeRuntimeStatus maps Dapr's protobuf-style status enum to a short
+// PascalCase string. Unknown values fall through to the raw enum .String()
+// form so we don't silently drop new statuses if Dapr adds them.
+func normalizeRuntimeStatus(rs protos.OrchestrationStatus) string {
+	switch rs {
+	case protos.OrchestrationStatus_ORCHESTRATION_STATUS_RUNNING:
+		return "Running"
+	case protos.OrchestrationStatus_ORCHESTRATION_STATUS_COMPLETED:
+		return "Completed"
+	case protos.OrchestrationStatus_ORCHESTRATION_STATUS_FAILED:
+		return "Failed"
+	case protos.OrchestrationStatus_ORCHESTRATION_STATUS_TERMINATED:
+		return "Terminated"
+	case protos.OrchestrationStatus_ORCHESTRATION_STATUS_PENDING:
+		return "Pending"
+	case protos.OrchestrationStatus_ORCHESTRATION_STATUS_SUSPENDED:
+		return "Suspended"
+	case protos.OrchestrationStatus_ORCHESTRATION_STATUS_CANCELED:
+		return "Canceled"
+	default:
+		return rs.String()
+	}
 }
 
 type Server struct {
@@ -93,6 +144,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /onboarding", s.handleCreateOnboarding)
+	mux.HandleFunc("GET /onboardings/{id}", s.handleGetOnboarding)
 	mux.HandleFunc("POST /onboardings/{id}/approve", s.ApproveOnboarding)
 	mux.HandleFunc("POST /onboardings/{id}/deny", s.DenyOnboarding)
 
@@ -105,6 +157,52 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// handleCreateOnboarding schedules a new workflow instance and returns 202
+// with the instance ID immediately — it does NOT wait for approval. Clients
+// then raise the approval/denial event via the /approve or /deny endpoints
+// and poll GET /onboardings/{id} for completion.
+func (s *Server) handleCreateOnboarding(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var request OnboardingRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "unable to parse body", http.StatusBadRequest)
+		return
+	}
+
+	id, err := s.wfClient.Schedule(r.Context(), "OnboardingWorkflow", request)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("schedule workflow failed: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(WorkflowState{
+		ID:     id,
+		Status: "Running",
+	})
+}
+
+// handleGetOnboarding returns the current state of a workflow instance.
+// Non-blocking — returns Status="Running" while the workflow waits for an
+// approval event. Once the workflow completes, Result holds the fullname;
+// on failure (e.g., denied), Error holds the workflow error message.
+func (s *Server) handleGetOnboarding(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "missing workflow id", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+
+	state, err := s.wfClient.GetState(r.Context(), id)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("fetch state failed: %v", err), http.StatusBadGateway)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(state)
 }
 
 func (s *Server) ApproveOnboarding(w http.ResponseWriter, r *http.Request) {
@@ -131,30 +229,6 @@ func (s *Server) raiseApproval(w http.ResponseWriter, r *http.Request, approved 
 	}
 
 	_ = json.NewEncoder(w).Encode(okMessage)
-}
-
-func (s *Server) handleCreateOnboarding(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var request OnboardingRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "unable to parse body", http.StatusBadRequest)
-		return
-	}
-
-	id, err := s.wfClient.Schedule(r.Context(), "OnboardingWorkflow", request)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("schedule workflow failed: %v", err), http.StatusBadGateway)
-		return
-	}
-
-	var fullname string
-	if err := s.wfClient.AwaitOutput(r.Context(), id, &fullname); err != nil {
-		http.Error(w, fmt.Sprintf("await workflow failed: %v", err), http.StatusBadGateway)
-		return
-	}
-
-	_ = json.NewEncoder(w).Encode(fullname)
 }
 
 func OnboardingWorkflow(ctx *workflow.WorkflowContext) (any, error) {

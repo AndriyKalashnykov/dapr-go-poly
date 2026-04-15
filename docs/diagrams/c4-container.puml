@@ -1,0 +1,51 @@
+@startuml c4-container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/v2.11.0/C4_Container.puml
+
+title dapr-go-poly — C4 Container
+
+skinparam backgroundColor #FAFAFA
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam defaultFontName "Inter, Helvetica, Arial, sans-serif"
+skinparam defaultFontSize 13
+skinparam ArrowColor #37474F
+skinparam ArrowThickness 1.2
+skinparam rectangleBorderThickness 1.3
+
+UpdateElementStyle("person",       $fontColor="#FFFFFF", $bgColor="#0F766E", $borderColor="#134E4A")
+UpdateElementStyle("container",    $fontColor="#FFFFFF", $bgColor="#2563EB", $borderColor="#1E3A8A")
+UpdateElementStyle("container_db", $fontColor="#FFFFFF", $bgColor="#7C3AED", $borderColor="#4C1D95")
+UpdateBoundaryStyle($bgColor="#F1F5F9", $borderColor="#94A3B8", $fontColor="#1E293B")
+
+Person(dev, "Developer / Operator")
+
+System_Boundary(sys, "dapr-go-poly") {
+  Container(product, "product-service", ".NET 10, EF Core, FluentValidation", "REST CRUD for products.")
+  Container(order,   "order-service",   ".NET 10, EF Core, RabbitMQ client",  "Serves GET /api/orders; a hosted BackgroundService consumes the 'orders' queue and persists orders.")
+  Container(onboard, "onboarding",      "Go 1.26, Dapr Workflow",             "Orchestrates onboarding with manual approve/deny via Dapr durable workflows.")
+  Container(basket,  "basket-service",  "Go 1.26, Fiber (routes WIP)",        "Scaffold for a future Dapr-fronted basket API.")
+
+  Container(placement, "dapr-placement",  "Dapr 1.17.3",  "Actor placement for Dapr workflows.")
+  Container(scheduler, "dapr-scheduler",  "Dapr 1.17.3",  "Job scheduler for Dapr workflows; embedded etcd on tmpfs.")
+
+  ContainerDb(pg,    "postgres",   "Postgres 17",               "Per-service schemas: 'product' (products), 'order' (orders).")
+  ContainerDb(mq,    "rabbitmq",   "RabbitMQ 3 (management)",   "Durable queue 'orders'; order-service consumes.")
+}
+
+Rel(dev, product, "CRUD products", "HTTP / JSON :1000")
+Rel(dev, order,   "List orders",    "HTTP / JSON :1001")
+Rel(dev, onboard, "Start/approve/deny onboarding", "HTTP / JSON :8080")
+
+Rel(order, product, "Lookup product by id\n(validation)", "HTTP / JSON")
+Rel(order, mq,      "Consumes 'orders' queue", "AMQP")
+
+Rel(product, pg, "Reads/writes", "TCP 5432")
+Rel(order,   pg, "Reads/writes", "TCP 5432")
+
+Rel(onboard, scheduler, "Schedules + awaits workflows", "gRPC")
+Rel(scheduler, placement, "Actor placement", "gRPC")
+
+Rel(basket, product, "Service invocation (WIP — routes disabled)", "HTTP via Dapr")
+
+SHOW_LEGEND()
+@enduml

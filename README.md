@@ -7,6 +7,8 @@
 
 A polyglot microservices project using [Dapr](https://dapr.io/) with Go and .NET services, orchestrated via Docker Compose. Demonstrates service invocation, pub/sub messaging, and state management across multiple language runtimes.
 
+<p align="center"><img src="docs/diagrams/out/c4-context.png" alt="C4 Context diagram" width="420"></p>
+
 | Component | Technology | Rationale |
 |-----------|-----------|-----------|
 | Go services | Go 1.26+ (`basket-service`, `onboarding`) | Low-overhead runtime well suited to sidecar-fronted microservices |
@@ -19,6 +21,21 @@ A polyglot microservices project using [Dapr](https://dapr.io/) with Go and .NET
 | Local CI | [act](https://github.com/nektos/act) `0.2.87` | Reproduce CI locally; pinned via Renovate `customManagers` |
 | Dependency updates | Renovate (platform automerge) | Single `customManagers` regex tracks every Makefile `# renovate:` comment — no per-tool config drift |
 
+## Architecture
+
+The Container view (C4 Level 2) shows the four services, their external dependencies (Postgres, RabbitMQ, Dapr placement/scheduler), and the cross-container relationships that matter at runtime.
+
+<p align="center"><img src="docs/diagrams/out/c4-container.png" alt="C4 Container diagram" width="800"></p>
+
+Source: [`docs/diagrams/c4-container.puml`](docs/diagrams/c4-container.puml) • [`docs/diagrams/c4-context.puml`](docs/diagrams/c4-context.puml). Render with `make diagrams`; CI drift-checks via `make diagrams-check` (wired into `make static-check`).
+
+A few facts worth surfacing from the Container diagram:
+
+- **Cross-service fan-out:** `order-service` calls `product-service` via a plain `HttpClient` (base URL `PRODUCT_SERVICE_BASE_URL`) — not Dapr service invocation. This is exercised by `OrderValidator` integration tests + the `make e2e` compose suite.
+- **Async pipeline:** orders arrive on the RabbitMQ `orders` queue; a hosted `OrdersConsumer` BackgroundService in `order-service` persists them to Postgres. `GET /api/orders` reads the result.
+- **Dapr workflows:** `onboarding` is the only service that exercises Dapr durable workflows (approve/deny via `RaiseEvent`). Placement + scheduler are required for workflow orchestration.
+- **`basket-service`** is a scaffold — routes are commented out pending the Dapr service-invocation pattern landing.
+
 ## Project Structure
 
 ```text
@@ -26,8 +43,8 @@ basket-service/                      # Go service (Fiber + Dapr client)
 onboarding/                          # Go service (Dapr Workflow)
 order-service/                       # .NET service (EF Core + RabbitMQ consumer)
 product-service/                     # .NET service (EF Core / Postgres)
-order-service.IntegrationTests/      # xUnit + Testcontainers integration tests
-product-service.IntegrationTests/    # xUnit + Testcontainers integration tests
+order-service.IntegrationTests/      # TUnit + Testcontainers integration tests
+product-service.IntegrationTests/    # TUnit + Testcontainers integration tests
 e2e/
   docker-compose.e2e.yml             # Self-contained e2e stack (postgres + rabbitmq + services)
   e2e-test.sh                        # curl-based e2e assertions
@@ -53,7 +70,7 @@ make compose-up        # bring up full stack (postgres + rabbitmq + services + D
 | Layer | Target | Speed | Dependencies |
 |-------|--------|-------|--------------|
 | **Unit** | `make test` | seconds | None — pure Go/FluentValidation logic |
-| **Integration** | `make integration-test` | tens of seconds | Testcontainers (Postgres, RabbitMQ); .NET uses `WebApplicationFactory`; Go uses `//go:build integration` |
+| **Integration** | `make integration-test` | tens of seconds | Testcontainers (Postgres, RabbitMQ); .NET uses [TUnit](https://github.com/thomhurst/TUnit) + `WebApplicationFactory` via `dotnet run` (Microsoft.Testing.Platform); Go uses `//go:build integration` |
 | **E2E** | `make e2e` | minutes | Self-contained `e2e/docker-compose.e2e.yml` (postgres + rabbitmq + product-service + order-service). Exercises HTTP endpoints, CRUD round-trip, and validation negatives via `e2e/e2e-test.sh`. |
 
 ## Prerequisites

@@ -24,6 +24,8 @@ GITLEAKS_VERSION := 8.30.1
 ACTIONLINT_VERSION := 1.7.12
 # renovate: datasource=github-releases depName=koalaman/shellcheck
 SHELLCHECK_VERSION := 0.11.0
+# renovate: datasource=docker depName=plantuml/plantuml
+PLANTUML_VERSION := 1.2026.2
 # renovate: datasource=github-releases depName=kubernetes-sigs/kind
 KIND_VERSION     := 0.25.0
 # Pair with KIND_VERSION per KinD release notes.
@@ -36,6 +38,7 @@ NODE_VERSION := $(shell cat .nvmrc 2>/dev/null || echo 22)
 SOLUTION       := dapr-go-poly.slnx
 GO_SERVICES    := basket-service onboarding
 DOTNET_SERVICES := order-service product-service
+DOTNET_TEST_PROJECTS := product-service.IntegrationTests order-service.IntegrationTests
 
 # === Docker ===
 export KO_DOCKER_REPO := docker.io/andriykalashnykov
@@ -178,8 +181,13 @@ test: deps
 
 #integration-test: @ Run integration tests (Testcontainers for Postgres/RabbitMQ; requires Docker)
 integration-test: deps
-	@echo "Running .NET integration tests..."
-	@dotnet test $(SOLUTION) --filter "Category=Integration" -c Release --nologo || exit 1
+	@echo "Running .NET integration tests (TUnit via Microsoft.Testing.Platform)..."
+	@export TESTINGPLATFORM_TELEMETRY_OPTOUT=1; \
+	dotnet restore $(SOLUTION) --nologo -v q || exit 1; \
+	for proj in $(DOTNET_TEST_PROJECTS); do \
+		echo "--- $$proj ---"; \
+		dotnet run --project $$proj -c Release || exit 1; \
+	done
 	@echo "Running Go integration tests (sidecar-dependent tests skip if Dapr not reachable)..."
 	@for svc in $(GO_SERVICES); do \
 		echo "Integration testing $$svc..."; \
@@ -285,8 +293,34 @@ vulncheck: deps deps-govulncheck
 			grep -qE '(>|has the following vulnerable)' /tmp/vuln-$$svc.log && { echo "Vulnerable packages found in $$svc"; exit 1; } || true) || exit 1; \
 	done
 
-#static-check: @ Composite quality gate (lint-ci + lint + vulncheck + secrets + trivy-fs + deps-prune-check)
-static-check: lint-ci lint vulncheck secrets trivy-fs deps-prune-check
+#diagrams: @ Render C4-PlantUML sources under docs/diagrams/ to PNG
+diagrams:
+	@command -v docker >/dev/null 2>&1 || { echo "Error: docker required for diagrams"; exit 1; }
+	@mkdir -p docs/diagrams/out
+	@for src in docs/diagrams/*.puml; do \
+		name=$$(basename $$src .puml); \
+		echo "Rendering $$name..."; \
+		docker run --rm -u "$$(id -u):$$(id -g)" \
+			-v "$$PWD/docs/diagrams:/work" \
+			plantuml/plantuml:$(PLANTUML_VERSION) \
+			-tpng -o /work/out "/work/$$(basename $$src)" || exit 1; \
+	done
+
+#diagrams-clean: @ Remove rendered diagram output
+diagrams-clean:
+	@rm -rf docs/diagrams/out
+
+#diagrams-check: @ Verify committed PNGs match the .puml sources (CI gate)
+diagrams-check: diagrams
+	@if ! git diff --exit-code -- docs/diagrams/out >/dev/null 2>&1; then \
+		echo "ERROR: docs/diagrams/out/ is out of sync with .puml sources. Run 'make diagrams' and commit the result."; \
+		git diff --stat -- docs/diagrams/out; \
+		exit 1; \
+	fi; \
+	echo "Diagrams match sources."
+
+#static-check: @ Composite quality gate (lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
+static-check: lint-ci lint vulncheck secrets trivy-fs diagrams-check deps-prune-check
 
 #update: @ Update all dependencies to latest versions
 update: deps
@@ -393,7 +427,7 @@ renovate-validate: renovate-bootstrap
 		npx --yes renovate --platform=local; \
 	fi
 
-.PHONY: help deps deps-act deps-hadolint deps-govulncheck deps-mise deps-kind deps-golangci deps-trivy deps-gitleaks deps-actionlint deps-shellcheck clean format build test integration-test e2e e2e-kind kind-up kind-down lint lint-ci trivy-fs secrets vulncheck static-check update \
+.PHONY: help deps deps-act deps-hadolint deps-govulncheck deps-mise deps-kind deps-golangci deps-trivy deps-gitleaks deps-actionlint deps-shellcheck clean format build test integration-test e2e e2e-kind kind-up kind-down lint lint-ci trivy-fs secrets vulncheck static-check diagrams diagrams-clean diagrams-check update \
 	deps-prune deps-prune-check \
 	image-build run compose-down compose-up \
 	ci ci-run release \

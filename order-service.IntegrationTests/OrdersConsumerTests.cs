@@ -1,22 +1,23 @@
-using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
-using Xunit;
+using TUnit.Assertions;
+using TUnit.Assertions.Extensions;
+using TUnit.Core;
+using TUnit.Core.Interfaces;
 
 namespace order_service.IntegrationTests;
 
 /// <summary>
-/// End-to-end-ish integration test for OrdersConsumer: publish to the real RabbitMQ
-/// "orders" queue and assert the consumer persists the Order to Postgres.
+/// Integration test for OrdersConsumer: publish to the real RabbitMQ "orders"
+/// queue and assert the consumer persists the Order to Postgres.
 /// </summary>
-[Trait("Category", "Integration")]
-public sealed class OrdersConsumerTests : IAsyncLifetime
+[Category("Integration")]
+public sealed class OrdersConsumerTests : IAsyncInitializer, IAsyncDisposable
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
         .WithImage("postgres:17-alpine")
@@ -36,12 +37,12 @@ public sealed class OrdersConsumerTests : IAsyncLifetime
         await Task.WhenAll(_postgres.StartAsync(), _rabbit.StartAsync());
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await Task.WhenAll(_postgres.DisposeAsync().AsTask(), _rabbit.DisposeAsync().AsTask());
     }
 
-    [Fact]
+    [Test]
     public async Task ReceivedOrder_IsPersistedToDatabase()
     {
         Environment.SetEnvironmentVariable("RABBITMQ_HOST", _rabbit.Hostname);
@@ -87,10 +88,10 @@ public sealed class OrdersConsumerTests : IAsyncLifetime
         await cts.CancelAsync();
         try { await task; } catch (OperationCanceledException) { }
 
-        Assert.NotNull(stored);
-        Assert.Equal(order.ProductId, stored!.ProductId);
-        Assert.Equal(3u, stored.Quantity);
-        Assert.Equal(12.50m, stored.Price);
+        await Assert.That(stored).IsNotNull();
+        await Assert.That(stored!.ProductId).IsEqualTo(order.ProductId);
+        await Assert.That(stored.Quantity).IsEqualTo(3u);
+        await Assert.That(stored.Price).IsEqualTo(12.50m);
     }
 
     private void PublishToOrdersQueue(byte[] body)

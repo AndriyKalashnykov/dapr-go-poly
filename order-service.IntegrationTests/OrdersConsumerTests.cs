@@ -19,15 +19,13 @@ namespace order_service.IntegrationTests;
 [Category("Integration")]
 public sealed class OrdersConsumerTests : IAsyncInitializer, IAsyncDisposable
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("order")
         .WithUsername("postgres")
         .WithPassword("test")
         .Build();
 
-    private readonly RabbitMqContainer _rabbit = new RabbitMqBuilder()
-        .WithImage("rabbitmq:3-management-alpine")
+    private readonly RabbitMqContainer _rabbit = new RabbitMqBuilder("rabbitmq:3-management-alpine")
         .WithUsername("guest")
         .WithPassword("guest")
         .Build();

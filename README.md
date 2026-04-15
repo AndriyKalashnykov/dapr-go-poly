@@ -21,40 +21,6 @@ A polyglot microservices project using [Dapr](https://dapr.io/) with Go and .NET
 | Local CI | [act](https://github.com/nektos/act) `0.2.87` | Reproduce CI locally; pinned via Renovate `customManagers` |
 | Dependency updates | Renovate (platform automerge) | Single `customManagers` regex tracks every Makefile `# renovate:` comment — no per-tool config drift |
 
-## Architecture
-
-The Container view (C4 Level 2) shows the four services, their external dependencies (Postgres, RabbitMQ, Dapr placement/scheduler), and the cross-container relationships that matter at runtime.
-
-<p align="center"><img src="docs/diagrams/out/c4-container.png" alt="C4 Container diagram" width="800"></p>
-
-Source: [`docs/diagrams/c4-container.puml`](docs/diagrams/c4-container.puml) • [`docs/diagrams/c4-context.puml`](docs/diagrams/c4-context.puml). Render with `make diagrams`; CI drift-checks via `make diagrams-check` (wired into `make static-check`).
-
-A few facts worth surfacing from the Container diagram:
-
-- **Cross-service fan-out:** `order-service` calls `product-service` via a plain `HttpClient` (base URL `PRODUCT_SERVICE_BASE_URL`) — not Dapr service invocation. This is exercised by `OrderValidator` integration tests + the `make e2e` compose suite.
-- **Async pipeline:** orders arrive on the RabbitMQ `orders` queue; a hosted `OrdersConsumer` BackgroundService in `order-service` persists them to Postgres. `GET /api/orders` reads the result.
-- **Dapr workflows:** `onboarding` is the only service that exercises Dapr durable workflows. Its HTTP API is async — `POST /onboarding` returns 202 with the instance id immediately; `POST /onboardings/{id}/approve` (or `/deny`) raises the external event; `GET /onboardings/{id}` returns the current state, including `result` once completed. Placement + scheduler + an actor-capable state store (Redis, per `e2e/dapr/components/statestore.yaml`) are required for workflow orchestration.
-- **`basket-service`** is a scaffold — routes are commented out pending the Dapr service-invocation pattern landing.
-
-## Project Structure
-
-```text
-basket-service/                      # Go service (Fiber + Dapr client)
-onboarding/                          # Go service (Dapr Workflow)
-order-service/                       # .NET service (EF Core + RabbitMQ consumer)
-product-service/                     # .NET service (EF Core / Postgres)
-order-service.IntegrationTests/      # TUnit + Testcontainers integration tests
-product-service.IntegrationTests/    # TUnit + Testcontainers integration tests
-e2e/
-  docker-compose.e2e.yml             # Self-contained e2e stack (Dapr control plane + Redis + postgres + rabbitmq + 3 app services + onboarding sidecar)
-  dapr/components/statestore.yaml    # Dapr state store component (Redis, actorStateStore=true — required by Dapr Workflow)
-  e2e-test.sh                        # curl-based e2e assertions (21 total)
-dapr-go-poly.slnx                    # .NET solution file (modern XML format)
-docker-compose.yml                   # Base: Dapr control plane (placement + scheduler)
-global.json                          # .NET SDK version pin
-renovate.json                        # Renovate dependency update configuration
-```
-
 ## Quick Start
 
 ```bash
@@ -95,6 +61,40 @@ Install all required dependencies:
 
 ```bash
 make deps
+```
+
+## Architecture
+
+The Container view (C4 Level 2) shows the four services, their external dependencies (Postgres, RabbitMQ, Dapr placement/scheduler), and the cross-container relationships that matter at runtime.
+
+<p align="center"><img src="docs/diagrams/out/c4-container.png" alt="C4 Container diagram" width="800"></p>
+
+Source: [`docs/diagrams/c4-container.puml`](docs/diagrams/c4-container.puml) • [`docs/diagrams/c4-context.puml`](docs/diagrams/c4-context.puml). Render with `make diagrams`; CI drift-checks via `make diagrams-check` (wired into `make static-check`).
+
+A few facts worth surfacing from the Container diagram:
+
+- **Cross-service fan-out:** `order-service` calls `product-service` via a plain `HttpClient` (base URL `PRODUCT_SERVICE_BASE_URL`) — not Dapr service invocation. This is exercised by `OrderValidator` integration tests + the `make e2e` compose suite.
+- **Async pipeline:** orders arrive on the RabbitMQ `orders` queue; a hosted `OrdersConsumer` BackgroundService in `order-service` persists them to Postgres. `GET /api/orders` reads the result.
+- **Dapr workflows:** `onboarding` is the only service that exercises Dapr durable workflows. Its HTTP API is async — `POST /onboarding` returns 202 with the instance id immediately; `POST /onboardings/{id}/approve` (or `/deny`) raises the external event; `GET /onboardings/{id}` returns the current state, including `result` once completed. Placement + scheduler + an actor-capable state store (Redis, per `e2e/dapr/components/statestore.yaml`) are required for workflow orchestration.
+- **`basket-service`** is a scaffold — routes are commented out pending the Dapr service-invocation pattern landing.
+
+### Repository layout
+
+```text
+basket-service/                      # Go service (Fiber + Dapr client)
+onboarding/                          # Go service (Dapr Workflow)
+order-service/                       # .NET service (EF Core + RabbitMQ consumer)
+product-service/                     # .NET service (EF Core / Postgres)
+order-service.IntegrationTests/      # TUnit + Testcontainers integration tests
+product-service.IntegrationTests/    # TUnit + Testcontainers integration tests
+e2e/
+  docker-compose.e2e.yml             # Self-contained e2e stack (Dapr control plane + Redis + postgres + rabbitmq + 3 app services + onboarding sidecar)
+  dapr/components/statestore.yaml    # Dapr state store component (Redis, actorStateStore=true — required by Dapr Workflow)
+  e2e-test.sh                        # curl-based e2e assertions (21 total)
+dapr-go-poly.slnx                    # .NET solution file (modern XML format)
+docker-compose.yml                   # Base: Dapr control plane (placement + scheduler)
+global.json                          # .NET SDK version pin
+renovate.json                        # Renovate dependency update configuration
 ```
 
 ## Available Make Targets

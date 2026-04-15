@@ -103,6 +103,20 @@ A cleanup workflow (`.github/workflows/cleanup-runs.yml`) removes old workflow r
 - All Makefile `_VERSION` constants carry `# renovate:` inline comments; a single generic `customManagers` regex in `renovate.json` tracks them all — no per-tool config drift
 - User-local tool installs (`act`, `hadolint`, `govulncheck`, `trivy`, `gitleaks`, `actionlint`, `shellcheck`, `kind`) target `$HOME/.local/bin`; `export PATH` at the top of the Makefile makes them usable in the same `make` invocation
 
+## Upgrade Backlog
+
+Deferred upgrade items from `/upgrade-analysis` (last run 2026-04-15). Resolve or prune on next analysis.
+
+**Wave 2 — minor (in progress):**
+- [ ] `FakeItEasy` 8.3.0 → 9.0.1 (major — review release notes)
+- [ ] `kind` 0.25.0 → 0.31.0 + `KIND_NODE_IMAGE` bump to matching v1.33.x
+- [ ] **RabbitMQ 3.x is EOL (2024-12-31)** — bump `rabbitmq:3-management-alpine` → `rabbitmq:4-management-alpine`; verify `OrdersConsumer` reconnect logic against RabbitMQ 4
+
+**Wave 3 — major bases (quarterly):**
+- [ ] `redis:7-alpine` → `redis:8-alpine` (verify Dapr state store compatibility)
+- [ ] `postgres:17-alpine` → `postgres:18-alpine` (rehearse EF migrations)
+- [ ] `.nvmrc` 22 → 24 LTS
+
 ## Skills
 
 Use the following skills when working on related files:
@@ -115,9 +129,3 @@ Use the following skills when working on related files:
 | `.github/workflows/*.{yml,yaml}` | `/ci-workflow` |
 
 When spawning subagents, always pass conventions from the respective skill into the agent's prompt.
-
-## Monitoring Checklist
-
-Items to check on next upgrade analysis:
-
-- [ ] **grpc GO-2026-4762** — `google.golang.org/grpc` v1.79.2 has auth bypass fixed in v1.79.3. Indirect dep via `dapr/go-sdk`. Not called by our code. Will resolve when Dapr Go SDK bumps grpc. Track: `dapr/go-sdk` releases.

@@ -10,6 +10,8 @@ CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "de
 ACT_VERSION      := 0.2.87
 # renovate: datasource=github-releases depName=dapr/cli
 DAPR_VERSION     := 1.17.1
+# renovate: datasource=github-releases depName=dapr/dapr
+DAPR_RUNTIME_VERSION := 1.17.4
 # renovate: datasource=github-releases depName=hadolint/hadolint
 HADOLINT_VERSION := 2.14.0
 # renovate: datasource=go depName=golang.org/x/vuln/cmd/govulncheck
@@ -208,7 +210,7 @@ kind-up: deps-kind
 	@command -v dapr >/dev/null 2>&1 || { echo "Error: Dapr CLI required. See https://docs.dapr.io/getting-started/install-dapr-cli/"; exit 1; }
 	@kind create cluster --name $(APP_NAME) --image $(KIND_NODE_IMAGE) || true
 	@kubectl cluster-info --context kind-$(APP_NAME)
-	@dapr init -k --runtime-version 1.17.4 --wait
+	@dapr init -k --runtime-version $(DAPR_RUNTIME_VERSION) --wait
 
 #kind-down: @ Tear down the KinD cluster
 kind-down:

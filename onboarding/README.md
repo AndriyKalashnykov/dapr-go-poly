@@ -78,10 +78,10 @@ See the [repo README](../README.md) for the full three-layer test pyramid.
 
 ## Known upstream issue
 
-Dapr 1.17.3's `backend.(*grpcExecutor).GetInstance` panics with a
+Dapr 1.17.x's `backend.(*grpcExecutor).GetInstance` panics with a
 nil-pointer dereference when asked about a workflow instance that was never
 scheduled (durabletask-go). The sidecar becomes unreachable for the rest of
 the process lifetime. The e2e suite avoids triggering this by only calling
 `GET /onboardings/{id}` on ids returned from a prior `POST /onboarding`.
-Track the bug in dapr/durabletask-go issues; remove the workaround once
-1.17.4+ ships with a fix.
+Track the bug in dapr/durabletask-go issues; still present in durabletask-go
+v0.11.3 as of 2026-04-15 — remove the workaround once a fix lands upstream.

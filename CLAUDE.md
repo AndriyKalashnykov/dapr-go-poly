@@ -35,7 +35,7 @@ make ci-run        # Run GitHub Actions locally via act (randomized artifact por
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `ACT_VERSION` | `0.2.87` | Pinned act version for local CI |
-| `DAPR_VERSION` | `1.17.0` | Pinned Dapr CLI version |
+| `DAPR_VERSION` | `1.17.1` | Pinned Dapr CLI version |
 | `HADOLINT_VERSION` | `2.14.0` | Pinned hadolint version for Dockerfile linting |
 | `GOVULNCHECK_VERSION` | `1.1.4` | Pinned govulncheck version for Go CVE scanning |
 | `GOLANGCI_VERSION` | `2.11.4` | Pinned golangci-lint version (gocritic/gosec/errorlint/bodyclose/noctx) |
@@ -43,8 +43,8 @@ make ci-run        # Run GitHub Actions locally via act (randomized artifact por
 | `GITLEAKS_VERSION` | `8.30.1` | Pinned gitleaks version for secret scanning |
 | `ACTIONLINT_VERSION` | `1.7.12` | Pinned actionlint version for workflow linting |
 | `SHELLCHECK_VERSION` | `0.11.0` | Pinned shellcheck (required by actionlint to lint `run:` blocks) |
-| `KIND_VERSION` | `0.25.0` | Pinned KinD version for `make e2e-kind` scaffolding |
-| `KIND_NODE_IMAGE` | `kindest/node:v1.31.2` | KinD node image paired with `KIND_VERSION` |
+| `KIND_VERSION` | `0.31.0` | Pinned KinD version for `make e2e-kind` scaffolding |
+| `KIND_NODE_IMAGE` | `kindest/node:v1.35.0` (digest-pinned) | KinD node image paired with `KIND_VERSION` |
 | `PLANTUML_VERSION` | `1.2026.2` | Pinned PlantUML Docker image for `make diagrams` (C4 rendering) |
 | `NODE_VERSION` | `$(shell cat .nvmrc)` | Node major version sourced from `.nvmrc` (mise reads natively) |
 | `GO_SERVICES` | `basket-service onboarding` | Go service directories |

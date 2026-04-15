@@ -9,10 +9,18 @@
 // terminal) — without one, the test is skipped rather than failed so local
 // `make integration-test` runs stay green when the developer hasn't spun up
 // Dapr.
+//
+// All sidecar RPCs go through a context with a short deadline (see
+// testDeadline). Without that, a hung Wait call would silently block until
+// Go's default test timeout (10 min) killed the process — a real failure mode
+// observed on CI when the scheduler/placement coordination didn't complete in
+// time. A 30 s budget is generous enough for cold sidecars and small enough
+// that a stuck test surfaces as a diagnostic error rather than a silent hang.
 
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -24,10 +32,24 @@ import (
 	"github.com/dapr/go-sdk/client"
 )
 
+// testDeadline is the per-test wall-clock budget for any single sidecar RPC
+// (Wait/Schedule/RaiseEvent/Fetch). See the file-level doc comment for the
+// rationale.
+const testDeadline = 30 * time.Second
+
+// testCtx returns a context bounded by testDeadline, tied to t.Context() so
+// it still cancels on test cleanup. Callers MUST defer the returned cancel.
+func testCtx(t *testing.T) (context.Context, context.CancelFunc) {
+	t.Helper()
+	return context.WithTimeout(t.Context(), testDeadline)
+}
+
 func TestOnboardingWorkflow_ApprovedPath_ProducesFullName(t *testing.T) {
 	if !daprSidecarReachable(t) {
 		t.Skip("Dapr sidecar not reachable on the default gRPC port; skipping")
 	}
+	ctx, cancel := testCtx(t)
+	defer cancel()
 
 	wfClient, err := newWorkflowClientWithRetry(t, 5*time.Second)
 	if err != nil {
@@ -42,22 +64,22 @@ func TestOnboardingWorkflow_ApprovedPath_ProducesFullName(t *testing.T) {
 	if err := registry.AddActivity(CreateUser); err != nil {
 		t.Fatalf("register activity: %v", err)
 	}
-	if err := wfClient.StartWorker(t.Context(), registry); err != nil {
+	if err := wfClient.StartWorker(ctx, registry); err != nil {
 		t.Fatalf("start worker: %v", err)
 	}
 
 	input := OnboardingRequest{Firstname: "Grace", Lastname: "Hopper", Email: "grace@example.com"}
-	runID, err := wfClient.ScheduleWorkflow(t.Context(), "OnboardingWorkflow", workflow.WithInput(input))
+	runID, err := wfClient.ScheduleWorkflow(ctx, "OnboardingWorkflow", workflow.WithInput(input))
 	if err != nil {
 		t.Fatalf("schedule workflow: %v", err)
 	}
 
 	approval := OnboardingApprovalRequest{Approved: true}
-	if err := wfClient.RaiseEvent(t.Context(), runID, "onboarding-approval", workflow.WithEventPayload(approval)); err != nil {
+	if err := wfClient.RaiseEvent(ctx, runID, "onboarding-approval", workflow.WithEventPayload(approval)); err != nil {
 		t.Fatalf("raise approval event: %v", err)
 	}
 
-	state, err := wfClient.WaitForWorkflowCompletion(t.Context(), runID)
+	state, err := wfClient.WaitForWorkflowCompletion(ctx, runID)
 	if err != nil {
 		t.Fatalf("wait for completion: %v", err)
 	}
@@ -79,6 +101,8 @@ func TestOnboardingWorkflow_RemainsRunningUntilApprovalEvent(t *testing.T) {
 	if !daprSidecarReachable(t) {
 		t.Skip("Dapr sidecar not reachable on the default gRPC port; skipping")
 	}
+	ctx, cancel := testCtx(t)
+	defer cancel()
 
 	wfClient, err := newWorkflowClientWithRetry(t, 5*time.Second)
 	if err != nil {
@@ -88,11 +112,11 @@ func TestOnboardingWorkflow_RemainsRunningUntilApprovalEvent(t *testing.T) {
 	registry := workflow.NewRegistry()
 	_ = registry.AddWorkflow(OnboardingWorkflow)
 	_ = registry.AddActivity(CreateUser)
-	if err := wfClient.StartWorker(t.Context(), registry); err != nil {
+	if err := wfClient.StartWorker(ctx, registry); err != nil {
 		t.Fatalf("start worker: %v", err)
 	}
 
-	runID, err := wfClient.ScheduleWorkflow(t.Context(), "OnboardingWorkflow",
+	runID, err := wfClient.ScheduleWorkflow(ctx, "OnboardingWorkflow",
 		workflow.WithInput(OnboardingRequest{Firstname: "Waiting", Lastname: "Case"}))
 	if err != nil {
 		t.Fatalf("schedule: %v", err)
@@ -100,11 +124,11 @@ func TestOnboardingWorkflow_RemainsRunningUntilApprovalEvent(t *testing.T) {
 
 	// Wait for the workflow to enter the waiting state, then confirm it's
 	// not prematurely completed.
-	if _, err := wfClient.WaitForWorkflowStart(t.Context(), runID); err != nil {
+	if _, err := wfClient.WaitForWorkflowStart(ctx, runID); err != nil {
 		t.Fatalf("wait for start: %v", err)
 	}
 
-	state, err := wfClient.FetchWorkflowMetadata(t.Context(), runID)
+	state, err := wfClient.FetchWorkflowMetadata(ctx, runID)
 	if err != nil {
 		t.Fatalf("fetch metadata: %v", err)
 	}
@@ -113,7 +137,7 @@ func TestOnboardingWorkflow_RemainsRunningUntilApprovalEvent(t *testing.T) {
 	}
 
 	// Clean up by raising approval so the worker doesn't leak.
-	_ = wfClient.RaiseEvent(t.Context(), runID, "onboarding-approval",
+	_ = wfClient.RaiseEvent(ctx, runID, "onboarding-approval",
 		workflow.WithEventPayload(OnboardingApprovalRequest{Approved: true}))
 }
 
@@ -126,13 +150,15 @@ func TestRaiseEvent_OnUnknownInstance_ReturnsError(t *testing.T) {
 	if !daprSidecarReachable(t) {
 		t.Skip("Dapr sidecar not reachable on the default gRPC port; skipping")
 	}
+	ctx, cancel := testCtx(t)
+	defer cancel()
 
 	wfClient, err := newWorkflowClientWithRetry(t, 5*time.Second)
 	if err != nil {
 		t.Fatalf("workflow client: %v", err)
 	}
 
-	err = wfClient.RaiseEvent(t.Context(), "no-such-instance-"+time.Now().Format("20060102150405"),
+	err = wfClient.RaiseEvent(ctx, "no-such-instance-"+time.Now().Format("20060102150405"),
 		"onboarding-approval",
 		workflow.WithEventPayload(OnboardingApprovalRequest{Approved: true}))
 	if err == nil {
@@ -144,6 +170,8 @@ func TestOnboardingWorkflow_DeniedPath_FailsWithNotApproved(t *testing.T) {
 	if !daprSidecarReachable(t) {
 		t.Skip("Dapr sidecar not reachable on the default gRPC port; skipping")
 	}
+	ctx, cancel := testCtx(t)
+	defer cancel()
 
 	wfClient, err := newWorkflowClientWithRetry(t, 5*time.Second)
 	if err != nil {
@@ -153,22 +181,22 @@ func TestOnboardingWorkflow_DeniedPath_FailsWithNotApproved(t *testing.T) {
 	registry := workflow.NewRegistry()
 	_ = registry.AddWorkflow(OnboardingWorkflow)
 	_ = registry.AddActivity(CreateUser)
-	if err := wfClient.StartWorker(t.Context(), registry); err != nil {
+	if err := wfClient.StartWorker(ctx, registry); err != nil {
 		t.Fatalf("start worker: %v", err)
 	}
 
-	runID, err := wfClient.ScheduleWorkflow(t.Context(), "OnboardingWorkflow",
+	runID, err := wfClient.ScheduleWorkflow(ctx, "OnboardingWorkflow",
 		workflow.WithInput(OnboardingRequest{Firstname: "Denied", Lastname: "Case"}))
 	if err != nil {
 		t.Fatalf("schedule workflow: %v", err)
 	}
 
-	if err := wfClient.RaiseEvent(t.Context(), runID, "onboarding-approval",
+	if err := wfClient.RaiseEvent(ctx, runID, "onboarding-approval",
 		workflow.WithEventPayload(OnboardingApprovalRequest{Approved: false})); err != nil {
 		t.Fatalf("raise denial event: %v", err)
 	}
 
-	state, err := wfClient.WaitForWorkflowCompletion(t.Context(), runID)
+	state, err := wfClient.WaitForWorkflowCompletion(ctx, runID)
 	if err != nil {
 		t.Fatalf("wait for completion: %v", err)
 	}

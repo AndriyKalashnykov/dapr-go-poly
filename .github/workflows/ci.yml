@@ -36,6 +36,12 @@ jobs:
         with:
           go-version-file: basket-service/go.mod
           cache: true
+          # Go modules live in service subdirs, not at repo root. Without this,
+          # actions/setup-go logs "Restore cache failed: Dependencies file is
+          # not found" on every run.
+          cache-dependency-path: |
+            basket-service/go.sum
+            onboarding/go.sum
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
@@ -55,6 +61,12 @@ jobs:
         with:
           go-version-file: basket-service/go.mod
           cache: true
+          # Go modules live in service subdirs, not at repo root. Without this,
+          # actions/setup-go logs "Restore cache failed: Dependencies file is
+          # not found" on every run.
+          cache-dependency-path: |
+            basket-service/go.sum
+            onboarding/go.sum
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
@@ -74,6 +86,12 @@ jobs:
         with:
           go-version-file: basket-service/go.mod
           cache: true
+          # Go modules live in service subdirs, not at repo root. Without this,
+          # actions/setup-go logs "Restore cache failed: Dependencies file is
+          # not found" on every run.
+          cache-dependency-path: |
+            basket-service/go.sum
+            onboarding/go.sum
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
@@ -98,6 +116,12 @@ jobs:
         with:
           go-version-file: basket-service/go.mod
           cache: true
+          # Go modules live in service subdirs, not at repo root. Without this,
+          # actions/setup-go logs "Restore cache failed: Dependencies file is
+          # not found" on every run.
+          cache-dependency-path: |
+            basket-service/go.sum
+            onboarding/go.sum
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:

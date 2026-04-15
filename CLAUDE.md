@@ -103,15 +103,6 @@ A cleanup workflow (`.github/workflows/cleanup-runs.yml`) removes old workflow r
 - All Makefile `_VERSION` constants carry `# renovate:` inline comments; a single generic `customManagers` regex in `renovate.json` tracks them all — no per-tool config drift
 - User-local tool installs (`act`, `hadolint`, `govulncheck`, `trivy`, `gitleaks`, `actionlint`, `shellcheck`, `kind`) target `$HOME/.local/bin`; `export PATH` at the top of the Makefile makes them usable in the same `make` invocation
 
-## Upgrade Backlog
-
-Deferred upgrade items from `/upgrade-analysis` (last run 2026-04-15). Resolve or prune on next analysis.
-
-**Wave 3 — major bases (quarterly):**
-- [ ] `redis:7-alpine` → `redis:8-alpine` (verify Dapr state store compatibility)
-- [ ] `postgres:17-alpine` → `postgres:18-alpine` (rehearse EF migrations)
-- [ ] `.nvmrc` 22 → 24 LTS
-
 ## Skills
 
 Use the following skills when working on related files:

@@ -17,7 +17,7 @@ namespace product_service.IntegrationTests;
 /// </summary>
 public sealed class ProductsApiFixture : IAsyncInitializer, IAsyncDisposable
 {
-    public PostgreSqlContainer Postgres { get; } = new PostgreSqlBuilder("postgres:17-alpine")
+    public PostgreSqlContainer Postgres { get; } = new PostgreSqlBuilder("postgres:18-alpine")
         .WithDatabase("product")
         .WithUsername("postgres")
         .WithPassword("test")

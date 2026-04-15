@@ -12,7 +12,7 @@ namespace order_service.IntegrationTests;
 
 public sealed class OrderApiFixture : IAsyncInitializer, IAsyncDisposable
 {
-    public PostgreSqlContainer Postgres { get; } = new PostgreSqlBuilder("postgres:17-alpine")
+    public PostgreSqlContainer Postgres { get; } = new PostgreSqlBuilder("postgres:18-alpine")
         .WithDatabase("order")
         .WithUsername("postgres")
         .WithPassword("test")

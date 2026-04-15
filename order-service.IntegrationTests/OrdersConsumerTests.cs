@@ -19,7 +19,7 @@ namespace order_service.IntegrationTests;
 [Category("Integration")]
 public sealed class OrdersConsumerTests : IAsyncInitializer, IAsyncDisposable
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18-alpine")
         .WithDatabase("order")
         .WithUsername("postgres")
         .WithPassword("test")

@@ -55,7 +55,7 @@ services:
   # ------------------------------------------------------------------
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: test
@@ -71,7 +71,7 @@ services:
   redis:
     # Actor state store for Dapr Workflow. Dapr workflows require a state
     # store with actorStateStore=true; see e2e/dapr/components/statestore.yaml.
-    image: redis:7-alpine
+    image: redis:8-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s

@@ -86,11 +86,18 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    # `ping` returns healthy before RabbitMQ finishes its routing boot step;
+    # `check_running` waits for the full startup. Prevents a race where
+    # order-service's OrdersConsumer connects during boot and hits "None of
+    # the specified endpoints were reachable". Observed intermittently on
+    # slower CI runners. See RabbitMQ docs:
+    # https://www.rabbitmq.com/docs/monitoring#health-checks
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
       interval: 5s
-      timeout: 5s
-      retries: 15
+      timeout: 10s
+      retries: 20
+      start_period: 20s
 
   # ------------------------------------------------------------------
   # Application services + Dapr sidecars

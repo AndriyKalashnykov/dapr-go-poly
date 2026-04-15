@@ -37,9 +37,44 @@ public class OrdersConsumer : BackgroundService
             Password = rabbitMQPass ?? "guest"
         };
 
+        // Reconnect loop with exponential backoff. RabbitMQ's startup races
+        // with our Docker Compose healthcheck (`rabbitmq-diagnostics ping`
+        // returns OK before the routing step finishes); a single connect
+        // attempt on cold-boot often hits "None of the specified endpoints
+        // were reachable" and the consumer silently gives up. The compose
+        // healthcheck was tightened (check_running) but we keep a retry here
+        // for resilience against any other transient brokerwide issue.
+        IConnection? connection = null;
+        var connectDelay = TimeSpan.FromSeconds(1);
+        for (var attempt = 1; attempt <= 10; attempt++)
+        {
+            try
+            {
+                connection = await factory.CreateConnectionAsync(stoppingToken);
+                break;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("RabbitMQ connect attempt {Attempt} failed: {Message}; retrying in {Delay}",
+                    attempt, ex.Message, connectDelay);
+                try { await Task.Delay(connectDelay, stoppingToken); }
+                catch (OperationCanceledException) { return; }
+                connectDelay = TimeSpan.FromMilliseconds(Math.Min(connectDelay.TotalMilliseconds * 2, 15_000));
+            }
+        }
+        if (connection is null)
+        {
+            _logger.LogError("Giving up connecting to RabbitMQ after 10 attempts");
+            return;
+        }
+
         try
         {
-            using var connection = await factory.CreateConnectionAsync();
+            using var _conn = connection;
             using var channel = await connection.CreateChannelAsync();
 
             var c = await channel.QueueDeclareAsync(queue: queueName,
@@ -88,7 +123,7 @@ public class OrdersConsumer : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError($"Error while connecting to RabbitMQ: '{ex.Message}' {ex.StackTrace}");
+            _logger.LogError($"Error while consuming from RabbitMQ: '{ex.Message}' {ex.StackTrace}");
         }
     }
 }

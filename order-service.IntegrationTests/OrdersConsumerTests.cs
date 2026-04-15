@@ -25,7 +25,7 @@ public sealed class OrdersConsumerTests : IAsyncInitializer, IAsyncDisposable
         .WithPassword("test")
         .Build();
 
-    private readonly RabbitMqContainer _rabbit = new RabbitMqBuilder("rabbitmq:3-management-alpine")
+    private readonly RabbitMqContainer _rabbit = new RabbitMqBuilder("rabbitmq:4-management-alpine")
         .WithUsername("guest")
         .WithPassword("guest")
         .Build();

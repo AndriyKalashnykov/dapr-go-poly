@@ -107,11 +107,6 @@ A cleanup workflow (`.github/workflows/cleanup-runs.yml`) removes old workflow r
 
 Deferred upgrade items from `/upgrade-analysis` (last run 2026-04-15). Resolve or prune on next analysis.
 
-**Wave 2 — minor (in progress):**
-- [ ] `FakeItEasy` 8.3.0 → 9.0.1 (major — review release notes)
-- [ ] `kind` 0.25.0 → 0.31.0 + `KIND_NODE_IMAGE` bump to matching v1.33.x
-- [ ] **RabbitMQ 3.x is EOL (2024-12-31)** — bump `rabbitmq:3-management-alpine` → `rabbitmq:4-management-alpine`; verify `OrdersConsumer` reconnect logic against RabbitMQ 4
-
 **Wave 3 — major bases (quarterly):**
 - [ ] `redis:7-alpine` → `redis:8-alpine` (verify Dapr state store compatibility)
 - [ ] `postgres:17-alpine` → `postgres:18-alpine` (rehearse EF migrations)

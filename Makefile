@@ -27,9 +27,9 @@ SHELLCHECK_VERSION := 0.11.0
 # renovate: datasource=docker depName=plantuml/plantuml
 PLANTUML_VERSION := 1.2026.2
 # renovate: datasource=github-releases depName=kubernetes-sigs/kind
-KIND_VERSION     := 0.25.0
+KIND_VERSION     := 0.31.0
 # Pair with KIND_VERSION per KinD release notes.
-KIND_NODE_IMAGE  := kindest/node:v1.31.2
+KIND_NODE_IMAGE  := kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f
 
 # Node major version sourced from .nvmrc (mise reads it natively)
 NODE_VERSION := $(shell cat .nvmrc 2>/dev/null || echo 22)

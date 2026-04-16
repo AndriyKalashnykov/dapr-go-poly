@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    Enable NuGet package lock files (packages.lock.json) across all .NET
+    projects in the solution. Lock files let CI cache restored packages by
+    hashing the lock file, turning `dotnet restore` into a ~2s cache hit on
+    warm runs instead of re-resolving the dependency graph every time.
+
+    Wired into .github/workflows/ci.yml via
+      actions/setup-dotnet#cache: true
+      cache-dependency-path: '**/packages.lock.json'
+  -->
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+</Project>

@@ -49,7 +49,7 @@ export KO_DOCKER_REPO := docker.io/andriykalashnykov
 help:
 	@echo "Usage: make COMMAND"
 	@echo "Commands :"
-	@grep -E '[a-zA-Z\.\-]+:.*?@ .*$$' $(MAKEFILE_LIST)| tr -d '#' | awk 'BEGIN {FS = ":.*?@ "}; {printf "\033[32m%-20s\033[0m - %s\n", $$1, $$2}'
+	@grep -E '[a-zA-Z\.\-]+:.*?@ .*$$' $(MAKEFILE_LIST)| tr -d '#' | awk 'BEGIN {FS = ":.*?@ "}; {printf "\033[32m%-22s\033[0m - %s\n", $$1, $$2}'
 
 #deps: @ Verify required tools (auto-installs mise locally; idempotent)
 deps:
@@ -375,8 +375,8 @@ image-build: build
 		fi; \
 	done
 
-#run: @ Run order-service via Dapr
-run: deps
+#dapr-run: @ Run order-service locally via the Dapr CLI (host networking)
+dapr-run: deps
 	@cd order-service && dapr run --app-id product-service --app-port 8080 --placement-host-address host.docker.internal:50006 --dapr-http-port 3500
 
 #compose-down: @ Stop and remove Docker Compose services
@@ -431,6 +431,6 @@ renovate-validate: renovate-bootstrap
 
 .PHONY: help deps deps-act deps-hadolint deps-govulncheck deps-mise deps-kind deps-golangci deps-trivy deps-gitleaks deps-actionlint deps-shellcheck clean format build test integration-test e2e e2e-kind kind-up kind-down lint lint-ci trivy-fs secrets vulncheck static-check diagrams diagrams-clean diagrams-check update \
 	deps-prune deps-prune-check \
-	image-build run compose-down compose-up \
+	image-build dapr-run compose-down compose-up \
 	ci ci-run release \
 	renovate-bootstrap renovate-validate

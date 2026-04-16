@@ -6,15 +6,31 @@ on:
     tags: ['v*']
     paths-ignore:
       - '**/*.md'
+      - '!CLAUDE.md'
       - 'docs/**'
       - 'LICENSE'
       - '.gitignore'
+      - '.claudeignore'
+      - '.claude/**'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.jpeg'
+      - '**/*.gif'
+      - '**/*.svg'
   pull_request:
     paths-ignore:
       - '**/*.md'
+      - '!CLAUDE.md'
       - 'docs/**'
       - 'LICENSE'
       - '.gitignore'
+      - '.claudeignore'
+      - '.claude/**'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.jpeg'
+      - '**/*.gif'
+      - '**/*.svg'
   workflow_call:
 
 permissions:
@@ -46,6 +62,8 @@ jobs:
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
 
       - name: Static check
         run: make static-check
@@ -71,6 +89,8 @@ jobs:
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
 
       - name: Build
         run: make build
@@ -96,6 +116,8 @@ jobs:
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
 
       - name: Test
         run: make test
@@ -126,6 +148,8 @@ jobs:
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
 
       # No Dapr sidecar is bootstrapped here. Onboarding's Dapr workflow
       # lifecycle is exercised end-to-end by the e2e job (which brings up a
@@ -157,6 +181,11 @@ jobs:
         run: docker compose -f e2e/docker-compose.e2e.yml logs --tail=200 || true
 
   docker:
+    # Job-level gate: only runs on tag pushes. Previously the job always ran
+    # but the single `Build image` step was step-gated, wasting ~15s of runner
+    # setup on every non-tag push. Keeping the job in `needs:` of ci-pass is
+    # fine — ci-pass treats `skipped` as pass.
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [static-check, build, test]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -166,9 +195,10 @@ jobs:
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
 
       - name: Build image
-        if: startsWith(github.ref, 'refs/tags/')
         run: make image-build
 
   ci-pass:

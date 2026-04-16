@@ -110,7 +110,7 @@ Run `make help` to see all available targets.
 | `make integration-test` | Run integration tests (Testcontainers Postgres + RabbitMQ; requires Docker) |
 | `make e2e` | Run end-to-end tests via Docker Compose (postgres + rabbitmq + product/order service; self-contained in `e2e/docker-compose.e2e.yml`) |
 | `make clean` | Remove build artifacts |
-| `make run` | Run order-service via Dapr |
+| `make dapr-run` | Run order-service locally via the Dapr CLI |
 | `make update` | Update all dependencies to latest versions |
 
 ### Code Quality

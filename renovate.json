@@ -46,6 +46,16 @@
     },
     {
       "customType": "regex",
+      "description": "Track the mise version pinned in jdx/mise-action steps",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": [
+        "version:\\s*\"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\""
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "jdx/mise"
+    },
+    {
+      "customType": "regex",
       "description": "Track the C4-PlantUML stdlib version pinned in diagram !include URLs",
       "managerFilePatterns": ["/docs/diagrams/.*\\.puml$/"],
       "matchStrings": [

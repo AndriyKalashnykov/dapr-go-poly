@@ -32,27 +32,19 @@ make ci-run        # Run GitHub Actions locally via act (randomized artifact por
 
 ## Key Variables
 
+The CLI toolchain — `act`, `dapr` (CLI), `hadolint`, `govulncheck`, `golangci-lint`, `trivy`, `gitleaks`, `actionlint`, `shellcheck`, `kind`, plus `go` — is pinned in **`.mise.toml`** (the single source of truth) and installed by `mise install` (`make deps` locally; `jdx/mise-action` in CI). Only the values mise does not manage remain as Makefile constants:
+
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `ACT_VERSION` | `0.2.87` | Pinned act version for local CI |
-| `DAPR_VERSION` | `1.17.1` | Pinned Dapr CLI version |
 | `DAPR_RUNTIME_VERSION` | `1.17.4` | Pinned Dapr runtime version for `make kind-up` (`dapr init -k --runtime-version`) |
-| `HADOLINT_VERSION` | `2.14.0` | Pinned hadolint version for Dockerfile linting |
-| `GOVULNCHECK_VERSION` | `1.1.4` | Pinned govulncheck version for Go CVE scanning |
-| `GOLANGCI_VERSION` | `2.11.4` | Pinned golangci-lint version (gocritic/gosec/errorlint/bodyclose/noctx) |
-| `TRIVY_VERSION` | `0.69.3` | Pinned Trivy version for filesystem vulnerability scanning |
-| `GITLEAKS_VERSION` | `8.30.1` | Pinned gitleaks version for secret scanning |
-| `ACTIONLINT_VERSION` | `1.7.12` | Pinned actionlint version for workflow linting |
-| `SHELLCHECK_VERSION` | `0.11.0` | Pinned shellcheck (required by actionlint to lint `run:` blocks) |
-| `KIND_VERSION` | `0.31.0` | Pinned KinD version for `make e2e-kind` scaffolding |
-| `KIND_NODE_IMAGE` | `kindest/node:v1.35.0` (digest-pinned) | KinD node image paired with `KIND_VERSION` |
+| `KIND_NODE_IMAGE` | `kindest/node:v1.35.0` (digest-pinned) | KinD node image paired with the `kind` pin in `.mise.toml` |
 | `PLANTUML_VERSION` | `1.2026.2` | Pinned PlantUML Docker image for `make diagrams` (C4 rendering) |
 | `NODE_VERSION` | `$(shell cat .nvmrc)` | Node major version sourced from `.nvmrc` (mise reads natively) |
 | `GO_SERVICES` | `basket-service onboarding` | Go service directories |
 | `DOTNET_SERVICES` | `order-service product-service` | .NET service directories |
 | `DOTNET_TEST_PROJECTS` | `product-service.IntegrationTests order-service.IntegrationTests` | TUnit test projects run via `dotnet run --project` |
 
-Version manager: **mise** (installed via `make deps-mise` / `renovate-bootstrap`). NVM has been removed per the portfolio-wide Version Manager Policy. User-local tool installs (`act`, `hadolint`, `govulncheck`) target `$HOME/.local/bin` — no `sudo` required.
+Version manager: **mise** (installed via `make deps` / `make deps-mise` / `renovate-bootstrap`). NVM has been removed per the portfolio-wide Version Manager Policy. mise installs the whole CLI toolchain from `.mise.toml`; `.NET` stays on `global.json` via `actions/setup-dotnet`. No `sudo` required.
 
 ## Project Structure
 
@@ -83,12 +75,12 @@ LICENSE                              # MIT
 
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to `main`, tags `v*`, pull requests, `workflow_call`, and `workflow_dispatch`. Instead of trigger-level `paths-ignore`, a **`changes` detector job** (`dorny/paths-filter`) gates the heavy jobs: doc-only changes (markdown, `docs/**`, license, dotfiles, image assets) skip them, while `CLAUDE.md` and `docs/diagrams/**/*.puml` are explicitly re-included as code (so `diagrams-check` still gates `.puml` edits). On tag pushes `changes.outputs.code` is forced `true` so the release pipeline never silently no-ops:
 - **changes** job: `dorny/paths-filter` — every heavy job `needs: [changes]` + `if: needs.changes.outputs.code == 'true'`
-- **static-check** job: Checkout, Set up Go, Set up .NET, `make static-check` (check-go-alignment + lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
-- **build** job (needs changes + static-check): Checkout, Set up Go, Set up .NET, `make build`
-- **test** job (needs changes + static-check): Checkout, Set up Go, Set up .NET, `make test`
-- **integration-test** job (needs changes + static-check; skipped under act via `vars.ACT`): Set up Go/.NET, `make integration-test` (TUnit + Testcontainers). No Dapr sidecar — onboarding's Dapr workflow lifecycle is exercised by the e2e job instead
+- **static-check** job: Checkout, Install mise (Go + CLI toolchain), Set up .NET, `make static-check` (check-go-alignment + lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
+- **build** job (needs changes + static-check): Checkout, Install mise (Go + CLI toolchain), Set up .NET, `make build`
+- **test** job (needs changes + static-check): Checkout, Install mise (Go + CLI toolchain), Set up .NET, `make test`
+- **integration-test** job (needs changes + static-check; skipped under act via `vars.ACT`): Install mise (Go) + Set up .NET, `make integration-test` (TUnit + Testcontainers). No Dapr sidecar — onboarding's Dapr workflow lifecycle is exercised by the e2e job instead
 - **e2e** job (needs build + test; skipped under act): `make e2e` — brings up 9 containers (Dapr control plane + Redis state store + postgres + rabbitmq + 3 app services + onboarding sidecar), runs 16 curl-based assertions including the full onboarding async workflow lifecycle (POST 202 → approve/deny → poll GET status), captures compose logs on failure
-- **docker** job (needs changes + static-check + build + test): Checkout, Set up .NET, `make image-build` (job-level `if` gates on tag `v*`)
+- **docker** job (needs changes + static-check + build + test): Checkout, Install mise (Go) + Set up .NET, `make image-build` (job-level `if` gates on tag `v*`)
 - **ci-pass** job (aggregator, `if: always()`, needs all upstream jobs incl. `changes`): Verifies all upstream jobs passed (treats `skipped` as pass) — use as branch-protection required check
 
 A cleanup workflow (`.github/workflows/cleanup-runs.yml`) weekly removes old workflow runs — keeping the newest `KEEP_MINIMUM` **per workflow** so a low-frequency workflow is never fully purged (a global minimum would flip the CI workflow to GitHub `state=deleted`) — and prunes caches from deleted branches. Also supports `workflow_dispatch`.
@@ -101,9 +93,9 @@ A cleanup workflow (`.github/workflows/cleanup-runs.yml`) weekly removes old wor
 - C4 architecture diagrams (`docs/diagrams/*.puml`) are rendered to PNG via the pinned `plantuml/plantuml` Docker image; `make diagrams-check` is wired into `static-check` so stale committed output fails CI
 - Docker images built with `docker buildx`
 - Dockerfiles linted with hadolint via `make lint`
-- Dapr CLI version pinned as `DAPR_VERSION` in Makefile — always use a specific version, never `latest`
-- All Makefile `_VERSION` constants carry `# renovate:` inline comments; a single generic `customManagers` regex in `renovate.json` tracks them all — no per-tool config drift
-- User-local tool installs (`act`, `hadolint`, `govulncheck`, `trivy`, `gitleaks`, `actionlint`, `shellcheck`, `kind`) target `$HOME/.local/bin`; `export PATH` at the top of the Makefile makes them usable in the same `make` invocation
+- Dapr CLI (and the rest of the CLI toolchain) pinned in `.mise.toml` — always use a specific version, never `latest`
+- The remaining Makefile `_VERSION` constants (`DAPR_RUNTIME_VERSION`, `PLANTUML_VERSION`) carry `# renovate:` inline comments; `customManagers` regexes track them plus the `kindest/node` image and the C4-PlantUML `!include`; the mise-pinned tools are tracked by Renovate's native `mise` manager
+- The CLI toolchain is installed by `mise install` (`make deps` locally; `jdx/mise-action` in CI). The mise shims dir is on `PATH` (`export PATH` at the top of the Makefile) so the tools resolve in the same `make` invocation
 
 ## Skills
 

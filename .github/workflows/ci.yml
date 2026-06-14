@@ -55,16 +55,26 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      # mise installs Go (1.26.4, from .mise.toml) AND the CLI toolchain the
+      # `make` targets call (golangci-lint, hadolint, trivy, gitleaks,
+      # actionlint, shellcheck, govulncheck). Single source of truth.
+      - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
-          go-version-file: basket-service/go.mod
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
+          install: true
           cache: true
-          # Go modules live in service subdirs, not at repo root. Without this,
-          # actions/setup-go logs "Restore cache failed: Dependencies file is
-          # not found" on every run.
-          cache-dependency-path: |
-            basket-service/go.sum
-            onboarding/go.sum
+
+      # Go module + build cache (mise-action caches tool installs, not modules).
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-mod-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-mod-${{ runner.os }}-
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
@@ -83,16 +93,26 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      # mise installs Go (1.26.4, from .mise.toml) AND the CLI toolchain the
+      # `make` targets call (golangci-lint, hadolint, trivy, gitleaks,
+      # actionlint, shellcheck, govulncheck). Single source of truth.
+      - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
-          go-version-file: basket-service/go.mod
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
+          install: true
           cache: true
-          # Go modules live in service subdirs, not at repo root. Without this,
-          # actions/setup-go logs "Restore cache failed: Dependencies file is
-          # not found" on every run.
-          cache-dependency-path: |
-            basket-service/go.sum
-            onboarding/go.sum
+
+      # Go module + build cache (mise-action caches tool installs, not modules).
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-mod-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-mod-${{ runner.os }}-
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
@@ -111,16 +131,26 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      # mise installs Go (1.26.4, from .mise.toml) AND the CLI toolchain the
+      # `make` targets call (golangci-lint, hadolint, trivy, gitleaks,
+      # actionlint, shellcheck, govulncheck). Single source of truth.
+      - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
-          go-version-file: basket-service/go.mod
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
+          install: true
           cache: true
-          # Go modules live in service subdirs, not at repo root. Without this,
-          # actions/setup-go logs "Restore cache failed: Dependencies file is
-          # not found" on every run.
-          cache-dependency-path: |
-            basket-service/go.sum
-            onboarding/go.sum
+
+      # Go module + build cache (mise-action caches tool installs, not modules).
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-mod-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-mod-${{ runner.os }}-
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
@@ -143,16 +173,26 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      # mise installs Go (1.26.4, from .mise.toml) AND the CLI toolchain the
+      # `make` targets call (golangci-lint, hadolint, trivy, gitleaks,
+      # actionlint, shellcheck, govulncheck). Single source of truth.
+      - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
-          go-version-file: basket-service/go.mod
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
+          install: true
           cache: true
-          # Go modules live in service subdirs, not at repo root. Without this,
-          # actions/setup-go logs "Restore cache failed: Dependencies file is
-          # not found" on every run.
-          cache-dependency-path: |
-            basket-service/go.sum
-            onboarding/go.sum
+
+      # Go module + build cache (mise-action caches tool installs, not modules).
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-mod-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-mod-${{ runner.os }}-
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:
@@ -200,6 +240,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      # mise installs Go (1.26.4) — `make image-build` compiles the Go service
+      # binaries before building images.
+      - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
+        with:
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
+          install: true
+          cache: true
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5
         with:

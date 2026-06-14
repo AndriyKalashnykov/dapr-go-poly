@@ -3,37 +3,24 @@
 # bash (not the default /bin/sh) so `set -o pipefail` and bash-isms work in recipes.
 SHELL := /bin/bash
 
-export PATH := $(HOME)/.local/bin:$(PATH)
+# mise shims first so tools pinned in .mise.toml resolve in recipes (make does
+# not source the shell rc, so mise auto-activation never fires here).
+export PATH := $(HOME)/.local/share/mise/shims:$(HOME)/.local/bin:$(PATH)
 
 APP_NAME       := dapr-go-poly
 CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 
-# === Tool Versions (pinned, Renovate-tracked) ===
-# renovate: datasource=github-releases depName=nektos/act
-ACT_VERSION      := 0.2.87
-# renovate: datasource=github-releases depName=dapr/cli
-DAPR_VERSION     := 1.17.1
+# === Tool Versions ===
+# The CLI toolchain (act, dapr, hadolint, govulncheck, golangci-lint, trivy,
+# gitleaks, actionlint, shellcheck, kind) is pinned in .mise.toml and installed
+# by `mise install` (the `deps` target locally; jdx/mise-action in CI). Only
+# values mise does not manage live here:
 # renovate: datasource=github-releases depName=dapr/dapr
 DAPR_RUNTIME_VERSION := 1.17.4
-# renovate: datasource=github-releases depName=hadolint/hadolint
-HADOLINT_VERSION := 2.14.0
-# renovate: datasource=go depName=golang.org/x/vuln/cmd/govulncheck
-GOVULNCHECK_VERSION := 1.1.4
-# renovate: datasource=github-releases depName=golangci/golangci-lint
-GOLANGCI_VERSION := 2.11.4
-# renovate: datasource=github-releases depName=aquasecurity/trivy
-TRIVY_VERSION    := 0.69.3
-# renovate: datasource=github-releases depName=zricethezav/gitleaks
-GITLEAKS_VERSION := 8.30.1
-# renovate: datasource=github-releases depName=rhysd/actionlint
-ACTIONLINT_VERSION := 1.7.12
-# renovate: datasource=github-releases depName=koalaman/shellcheck
-SHELLCHECK_VERSION := 0.11.0
 # renovate: datasource=docker depName=plantuml/plantuml
 PLANTUML_VERSION := 1.2026.2
-# renovate: datasource=github-releases depName=kubernetes-sigs/kind
-KIND_VERSION     := 0.31.0
-# Pair with KIND_VERSION per KinD release notes.
+# kindest/node image (tag + digest) — keep in sync with the kind pin in
+# .mise.toml; tracked by a dedicated renovate customManager.
 KIND_NODE_IMAGE  := kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f
 
 # Node major version sourced from .nvmrc (mise reads it natively)
@@ -56,88 +43,31 @@ help:
 
 #deps: @ Verify required tools (auto-installs mise locally; idempotent)
 deps:
-	@# Bootstrap mise locally so contributors converge on the pinned Go
-	@# version from .mise.toml. CI uses actions/setup-go directly — skip there.
-	@if [ -z "$$CI" ] && ! command -v mise >/dev/null 2>&1; then \
+	@# Ensure mise is present. Real CI provides it via jdx/mise-action; a fresh
+	@# local checkout, or an `act` run (where mise-action is skipped because it
+	@# can't download mise inside the act container), installs it here. The
+	@# interactive-local path stops to prompt for shell activation; CI/act
+	@# continues (the shims dir is already on PATH, exported above).
+	@if ! command -v mise >/dev/null 2>&1; then \
 		echo "Installing mise (no root required, installs to ~/.local/bin)..."; \
 		curl -fsSL https://mise.run | sh; \
-		echo ""; \
-		echo "mise installed. Activate it in your shell, then re-run 'make deps':"; \
-		echo '  bash: echo '\''eval "$$(~/.local/bin/mise activate bash)"'\'' >> ~/.bashrc'; \
-		echo '  zsh:  echo '\''eval "$$(~/.local/bin/mise activate zsh)"'\''  >> ~/.zshrc'; \
-		exit 0; \
+		if [ -z "$$CI" ]; then \
+			echo ""; \
+			echo "mise installed. Activate it in your shell, then re-run 'make deps':"; \
+			echo '  bash: echo '\''eval "$$(~/.local/bin/mise activate bash)"'\'' >> ~/.bashrc'; \
+			echo '  zsh:  echo '\''eval "$$(~/.local/bin/mise activate zsh)"'\''  >> ~/.zshrc'; \
+			exit 0; \
+		fi; \
 	fi
-	@if [ -z "$$CI" ] && command -v mise >/dev/null 2>&1; then \
+	@# Install the pinned toolchain (local + CI/act) so every tool the recipes
+	@# call is available via the mise shims on PATH.
+	@if command -v mise >/dev/null 2>&1; then \
 		mise install --yes >/dev/null; \
 	fi
 	@command -v go >/dev/null 2>&1 || { echo "Error: Go required. See https://go.dev/dl/"; exit 1; }
 	@command -v dotnet >/dev/null 2>&1 || { echo "Error: .NET SDK required. See https://dotnet.microsoft.com/download"; exit 1; }
 	@command -v docker >/dev/null 2>&1 || { echo "Error: Docker required. See https://docs.docker.com/get-docker/"; exit 1; }
-	@command -v dapr >/dev/null 2>&1 || echo "Note: Dapr CLI $(DAPR_VERSION) not installed (optional). See https://docs.dapr.io/getting-started/install-dapr-cli/"
-
-#deps-act: @ Install act for local CI (idempotent, user-local)
-deps-act: deps
-	@command -v act >/dev/null 2>&1 || { echo "Installing act $(ACT_VERSION) to $$HOME/.local/bin..."; \
-		mkdir -p $$HOME/.local/bin; \
-		curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | bash -s -- -b $$HOME/.local/bin v$(ACT_VERSION); \
-	}
-
-#deps-hadolint: @ Install hadolint for Dockerfile linting (user-local)
-deps-hadolint:
-	@command -v hadolint >/dev/null 2>&1 || { echo "Installing hadolint $(HADOLINT_VERSION) to $$HOME/.local/bin..."; \
-		mkdir -p $$HOME/.local/bin; \
-		curl -sSfL -o $$HOME/.local/bin/hadolint https://github.com/hadolint/hadolint/releases/download/v$(HADOLINT_VERSION)/hadolint-Linux-x86_64 && \
-		chmod +x $$HOME/.local/bin/hadolint; \
-	}
-
-#deps-govulncheck: @ Install govulncheck for Go vulnerability scanning
-deps-govulncheck: deps
-	@command -v govulncheck >/dev/null 2>&1 || { echo "Installing govulncheck $(GOVULNCHECK_VERSION)..."; \
-		GOBIN=$$HOME/.local/bin go install golang.org/x/vuln/cmd/govulncheck@v$(GOVULNCHECK_VERSION); \
-	}
-
-#deps-golangci: @ Install golangci-lint for Go static analysis
-deps-golangci: deps
-	@command -v golangci-lint >/dev/null 2>&1 || { echo "Installing golangci-lint $(GOLANGCI_VERSION)..."; \
-		GOBIN=$$HOME/.local/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(GOLANGCI_VERSION); \
-	}
-
-#deps-trivy: @ Install Trivy for filesystem CVE scanning
-deps-trivy:
-	@command -v trivy >/dev/null 2>&1 || { echo "Installing trivy $(TRIVY_VERSION) to $$HOME/.local/bin..."; \
-		mkdir -p $$HOME/.local/bin; \
-		curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $$HOME/.local/bin v$(TRIVY_VERSION); \
-	}
-
-#deps-gitleaks: @ Install gitleaks for secret scanning
-deps-gitleaks:
-	@command -v gitleaks >/dev/null 2>&1 || { echo "Installing gitleaks $(GITLEAKS_VERSION) to $$HOME/.local/bin..."; \
-		mkdir -p $$HOME/.local/bin; \
-		curl -sSfL -o /tmp/gitleaks.tar.gz https://github.com/zricethezav/gitleaks/releases/download/v$(GITLEAKS_VERSION)/gitleaks_$(GITLEAKS_VERSION)_linux_x64.tar.gz && \
-		tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks && \
-		install -m 755 /tmp/gitleaks $$HOME/.local/bin/gitleaks && \
-		rm -f /tmp/gitleaks.tar.gz /tmp/gitleaks; \
-	}
-
-#deps-actionlint: @ Install actionlint for GitHub Actions workflow linting
-deps-actionlint:
-	@command -v actionlint >/dev/null 2>&1 || { echo "Installing actionlint $(ACTIONLINT_VERSION) to $$HOME/.local/bin..."; \
-		mkdir -p $$HOME/.local/bin; \
-		curl -sSfL -o /tmp/actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v$(ACTIONLINT_VERSION)/actionlint_$(ACTIONLINT_VERSION)_linux_amd64.tar.gz && \
-		tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint && \
-		install -m 755 /tmp/actionlint $$HOME/.local/bin/actionlint && \
-		rm -f /tmp/actionlint.tar.gz /tmp/actionlint; \
-	}
-
-#deps-shellcheck: @ Install shellcheck (required by actionlint to lint workflow run: steps)
-deps-shellcheck:
-	@command -v shellcheck >/dev/null 2>&1 || { echo "Installing shellcheck $(SHELLCHECK_VERSION) to $$HOME/.local/bin..."; \
-		mkdir -p $$HOME/.local/bin; \
-		curl -sSfL -o /tmp/shellcheck.tar.xz https://github.com/koalaman/shellcheck/releases/download/v$(SHELLCHECK_VERSION)/shellcheck-v$(SHELLCHECK_VERSION).linux.x86_64.tar.xz && \
-		tar -xJf /tmp/shellcheck.tar.xz -C /tmp && \
-		install -m 755 /tmp/shellcheck-v$(SHELLCHECK_VERSION)/shellcheck $$HOME/.local/bin/shellcheck && \
-		rm -rf /tmp/shellcheck.tar.xz /tmp/shellcheck-v$(SHELLCHECK_VERSION); \
-	}
+	@command -v dapr >/dev/null 2>&1 || echo "Note: Dapr CLI not installed (optional; pinned in .mise.toml). See https://docs.dapr.io/getting-started/install-dapr-cli/"
 
 #deps-mise: @ Install mise (user-local, no root required)
 deps-mise:
@@ -199,16 +129,8 @@ integration-test: deps
 		(cd $$svc && go test -tags=integration -race -v ./...) || exit 1; \
 	done
 
-#deps-kind: @ Install kind (Kubernetes-in-Docker) for K8s e2e
-deps-kind:
-	@command -v kind >/dev/null 2>&1 || { echo "Installing kind $(KIND_VERSION) to $$HOME/.local/bin..."; \
-		mkdir -p $$HOME/.local/bin; \
-		curl -sSfL -o $$HOME/.local/bin/kind https://kind.sigs.k8s.io/dl/v$(KIND_VERSION)/kind-linux-amd64 && \
-		chmod +x $$HOME/.local/bin/kind; \
-	}
-
 #kind-up: @ Create a KinD cluster and install Dapr (cloud-provider-kind for LoadBalancer IPs)
-kind-up: deps-kind
+kind-up: deps
 	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl required. See https://kubernetes.io/docs/tasks/tools/"; exit 1; }
 	@command -v dapr >/dev/null 2>&1 || { echo "Error: Dapr CLI required. See https://docs.dapr.io/getting-started/install-dapr-cli/"; exit 1; }
 	@kind create cluster --name $(APP_NAME) --image $(KIND_NODE_IMAGE) || true
@@ -260,7 +182,7 @@ e2e: deps
 	@docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans --volumes
 
 #lint: @ Run linters (golangci-lint + dotnet format --verify + hadolint)
-lint: deps deps-hadolint deps-golangci
+lint: deps
 	@for svc in $(GO_SERVICES); do \
 		echo "Linting $$svc..."; \
 		(cd $$svc && golangci-lint run ./...) || exit 1; \
@@ -277,19 +199,19 @@ lint: deps deps-hadolint deps-golangci
 	done
 
 #lint-ci: @ Lint GitHub Actions workflows (actionlint + shellcheck)
-lint-ci: deps-actionlint deps-shellcheck
+lint-ci: deps
 	@actionlint
 
 #trivy-fs: @ Scan filesystem for vulnerabilities, secrets, misconfigurations
-trivy-fs: deps-trivy
+trivy-fs: deps
 	@trivy fs --scanners vuln,secret,misconfig --severity CRITICAL,HIGH --exit-code 1 .
 
 #secrets: @ Scan git history for leaked secrets
-secrets: deps-gitleaks
+secrets: deps
 	@gitleaks detect --source . --verbose --redact --no-banner
 
 #vulncheck: @ Run vulnerability scanners (Go + .NET)
-vulncheck: deps deps-govulncheck
+vulncheck: deps
 	@for svc in $(GO_SERVICES); do \
 		echo "Vuln-checking $$svc..."; \
 		(cd $$svc && govulncheck ./...) || exit 1; \
@@ -411,12 +333,16 @@ ci: deps clean format static-check test integration-test build
 	@echo "Local CI pipeline passed."
 
 #ci-run: @ Run GitHub Actions workflow locally using act
-ci-run: deps-act
+ci-run: deps
 	@ACT_PORT=$$(shuf -i 40000-59999 -n 1); \
 	ARTIFACTS=$$(mktemp -d -t act-artifacts.XXXXXX); \
+	SECRETS=(); \
+	if [ -n "$$GITHUB_TOKEN" ]; then SECRETS+=(--secret GITHUB_TOKEN); \
+	elif [ -n "$$GH_ACCESS_TOKEN" ]; then export GITHUB_TOKEN="$$GH_ACCESS_TOKEN"; SECRETS+=(--secret GITHUB_TOKEN); fi; \
 	act push --container-architecture linux/amd64 \
 		--artifact-server-port $$ACT_PORT \
 		--artifact-server-path $$ARTIFACTS \
+		"$${SECRETS[@]}" \
 		--var ACT=true
 
 #release: @ Create and push a new tag
@@ -448,7 +374,7 @@ renovate-validate: renovate-bootstrap
 		npx --yes renovate --platform=local; \
 	fi
 
-.PHONY: help deps deps-act deps-hadolint deps-govulncheck deps-mise deps-kind deps-golangci deps-trivy deps-gitleaks deps-actionlint deps-shellcheck clean format build test integration-test e2e e2e-kind kind-up kind-down lint lint-ci trivy-fs secrets vulncheck check-go-alignment static-check diagrams diagrams-clean diagrams-check update \
+.PHONY: help deps deps-mise clean format build test integration-test e2e e2e-kind kind-up kind-down lint lint-ci trivy-fs secrets vulncheck check-go-alignment static-check diagrams diagrams-clean diagrams-check update \
 	deps-prune deps-prune-check \
 	image-build dapr-run compose-down compose-up \
 	ci ci-run release \

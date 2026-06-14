@@ -33,6 +33,12 @@ public sealed class OrderApiFixture : IAsyncInitializer, IAsyncDisposable
 
         Factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(b => b.UseEnvironment("Test"));
+
+        // Warm up the host once here (single-threaded) so Program.cs's
+        // EnsureCreatedAsync() runs before any parallel test method's first
+        // CreateClient() — otherwise concurrent first-CreateClient() calls race
+        // on schema creation (Postgres 42P07 "relation already exists").
+        using var warmup = Factory.CreateClient();
     }
 
     public async ValueTask DisposeAsync()

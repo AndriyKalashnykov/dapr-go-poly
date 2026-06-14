@@ -7,7 +7,7 @@
 
 A polyglot microservices project using [Dapr](https://dapr.io/) with Go and .NET services, orchestrated via Docker Compose. Demonstrates service invocation, pub/sub messaging, and state management across multiple language runtimes.
 
-<p align="center"><img src="docs/diagrams/out/c4-context.png" alt="C4 Context diagram" width="420"></p>
+<p align="center"><img src="docs/diagrams/out/c4-context.png" alt="C4 Context diagram" width="220"></p>
 
 | Component | Technology | Rationale |
 |-----------|-----------|-----------|
@@ -38,7 +38,7 @@ make compose-up        # bring up full stack (postgres + rabbitmq + services + D
 |-------|--------|-------|--------------|
 | **Unit** | `make test` | seconds | None — pure Go/FluentValidation logic |
 | **Integration** | `make integration-test` | tens of seconds | Testcontainers (Postgres, RabbitMQ); .NET uses [TUnit](https://github.com/thomhurst/TUnit) + `WebApplicationFactory` via `dotnet run` (Microsoft.Testing.Platform). Go integration tests are unit-test shape using a hand-rolled `workflowClient` fake — Dapr sidecar interactions are covered by e2e, not here |
-| **E2E** | `make e2e` | ~3–5 min | Self-contained `e2e/docker-compose.e2e.yml` (placement + scheduler + redis + postgres + rabbitmq + product-service + order-service + onboarding + its Dapr sidecar loaded with `e2e/dapr/components/statestore.yaml`). 16 curl-based assertions covering: CRUD + validation on product-service, JSON-array reachability on order-service, RabbitMQ → OrdersConsumer → Postgres async pipeline, onboarding async approve (POST → approve → poll `GET /onboardings/{id}` until `status=Completed`), denial (POST → deny → poll until `status=Failed` + `error` contains `not approved`), and the approve/deny error paths on unknown instance ids (502 from the Dapr sidecar) |
+| **E2E** | `make e2e` | ~3–5 min | Self-contained `e2e/docker-compose.e2e.yml` (placement + scheduler + redis + postgres + rabbitmq + product-service + order-service + onboarding + its Dapr sidecar loaded with `e2e/dapr/components/statestore.yaml`). 21 curl-based assertions covering: CRUD + validation on product-service, JSON-array reachability on order-service, RabbitMQ → OrdersConsumer → Postgres async pipeline, onboarding async approve (POST → approve → poll `GET /onboardings/{id}` until `status=Completed`), denial (POST → deny → poll until `status=Failed` + `error` contains `not approved`), and the approve/deny error paths on unknown instance ids (502 from the Dapr sidecar) |
 
 ## Prerequisites
 
@@ -60,6 +60,27 @@ Install all required dependencies:
 ```bash
 make deps
 ```
+
+## Configuration
+
+All operator-tunable values (host ports, container-internal port, Postgres/RabbitMQ
+credentials and hosts, database names, Dapr control-plane and sidecar ports, e2e
+readiness tuning) are externalized to environment variables with documented defaults
+in [`.env.example`](.env.example) — the committed source of truth.
+
+- `docker compose` auto-loads a gitignored `.env` from the project root; copy
+  `.env.example` to `.env` and edit to override. Every value is also mirrored as a
+  `${VAR:-default}` fallback at its use site, so the stack works with **no `.env`
+  present**.
+- The `e2e/e2e-test.sh` harness sources `.env.example` then `.env`, so overrides apply
+  there too. Host-side curl targets are derived from the host-port vars (e.g.
+  `PRODUCT_HOST_PORT`).
+- Override host ports to run multiple stacks without collisions, e.g.
+  `PRODUCT_HOST_PORT=2000 ORDER_HOST_PORT=2001 make compose-up`.
+
+Third-party image container-internal ports (postgres `5432`, rabbitmq `5672/15672`,
+redis `6379`) stay literal on the container side — those are fixed by the image; only
+the host-side mapping is tunable.
 
 ## Architecture
 

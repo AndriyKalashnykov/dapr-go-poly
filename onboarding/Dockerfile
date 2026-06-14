@@ -21,7 +21,12 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 # renovate: datasource=docker depName=gcr.io/distroless/static-debian12
 FROM gcr.io/distroless/static-debian12:nonroot
+# Container-internal HTTP port. The binary reads APP_PORT (defaults to 8080);
+# ENV provides the in-image default, EXPOSE documents it. Override at run time
+# with `-e APP_PORT=...` (compose wires it from APP_INTERNAL_PORT).
+ARG APP_INTERNAL_PORT=8080
+ENV APP_PORT=${APP_INTERNAL_PORT}
 COPY --from=build /out/onboarding /onboarding
-EXPOSE 8080
+EXPOSE ${APP_INTERNAL_PORT}
 USER 65532:65532
 ENTRYPOINT ["/onboarding"]

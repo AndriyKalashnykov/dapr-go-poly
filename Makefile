@@ -26,6 +26,12 @@ KIND_NODE_IMAGE  := kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e
 # Node major version sourced from .nvmrc (mise reads it natively)
 NODE_VERSION := $(shell cat .nvmrc 2>/dev/null || echo 22)
 
+# === Runtime tunables (mirror .env.example; `?=` lets env / .env override) ===
+APP_INTERNAL_PORT   ?= 8080
+DAPR_HTTP_PORT      ?= 3500
+DAPR_PLACEMENT_PORT ?= 50006
+DAPR_PLACEMENT_HOST ?= host.docker.internal
+
 # === Project Paths ===
 SOLUTION       := dapr-go-poly.slnx
 GO_SERVICES    := basket-service onboarding
@@ -318,7 +324,7 @@ image-build: build
 
 #dapr-run: @ Run order-service locally via the Dapr CLI (host networking)
 dapr-run: deps
-	@cd order-service && dapr run --app-id order-service --app-port 8080 --placement-host-address host.docker.internal:50006 --dapr-http-port 3500
+	@cd order-service && dapr run --app-id order-service --app-port $(APP_INTERNAL_PORT) --placement-host-address $(DAPR_PLACEMENT_HOST):$(DAPR_PLACEMENT_PORT) --dapr-http-port $(DAPR_HTTP_PORT)
 
 #compose-down: @ Stop and remove Docker Compose services
 compose-down:

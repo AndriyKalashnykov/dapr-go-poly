@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
 #
 # Self-contained e2e compose file.
 #
@@ -9,6 +10,11 @@
 # Note: mcr.microsoft.com/dotnet/aspnet:10.0 is chiseled (no shell/wget/curl),
 # so per-container healthchecks for the .NET services aren't feasible.
 # e2e-test.sh polls readiness from the host instead.
+#
+# Every operator-tunable value is `${VAR:-default}`-formed and documented in
+# `.env.example`. Third-party image container ports (postgres 5432, rabbitmq
+# 5672/15672, redis 6379) stay literal on the container side — only the host
+# mapping is tunable. Our services externalize both sides.
 #
 # Usage (via Makefile):
 #     make e2e
@@ -27,7 +33,7 @@ services:
 
   placement:
     image: "daprio/dapr:1.17.4@sha256:8e4da92d1e15a7aca7ecf416947d14d5a5db83ae502283219724d9608ff0e7d1"
-    command: ["./placement", "--port", "50006"]
+    command: ["./placement", "--port", "${DAPR_PLACEMENT_PORT:-50006}"]
 
   scheduler:
     image: "daprio/dapr:1.17.4@sha256:8e4da92d1e15a7aca7ecf416947d14d5a5db83ae502283219724d9608ff0e7d1"
@@ -37,7 +43,7 @@ services:
     command:
       - "./scheduler"
       - "--port"
-      - "50007"
+      - "${DAPR_SCHEDULER_PORT:-50007}"
       - "--id"
       - "scheduler-0"
       - "--etcd-data-dir"
@@ -57,13 +63,13 @@ services:
   postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: test
-      POSTGRES_DB: product
+      POSTGRES_USER: "${POSTGRES_USERNAME:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-test}"
+      POSTGRES_DB: "${POSTGRES_DB:-product}"
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME:-postgres}"]
       interval: 2s
       timeout: 5s
       retries: 15
@@ -81,11 +87,11 @@ services:
   rabbitmq:
     image: rabbitmq:4-management-alpine
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USERNAME:-guest}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:-guest}"
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_HOST_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672"
     # `ping` returns healthy before RabbitMQ finishes its routing boot step;
     # `check_running` waits for the full startup. Prevents a race where
     # order-service's OrdersConsumer connects during boot and hits "None of
@@ -108,14 +114,14 @@ services:
       context: ../product-service
       dockerfile: Dockerfile
     environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DATABASE: product
-      POSTGRES_USERNAME: postgres
-      POSTGRES_PASSWORD: test
-      ASPNETCORE_URLS: http://+:8080
+      POSTGRES_HOST: "${POSTGRES_HOST:-postgres}"
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+      POSTGRES_DATABASE: "${PRODUCT_DATABASE:-product}"
+      POSTGRES_USERNAME: "${POSTGRES_USERNAME:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-test}"
+      ASPNETCORE_URLS: "http://+:${APP_INTERNAL_PORT:-8080}"
     ports:
-      - "1000:8080"
+      - "${PRODUCT_HOST_PORT:-1000}:${APP_INTERNAL_PORT:-8080}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,19 +131,19 @@ services:
       context: ../order-service
       dockerfile: Dockerfile
     environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DATABASE: order
-      POSTGRES_USERNAME: postgres
-      POSTGRES_PASSWORD: test
-      PRODUCT_SERVICE_BASE_URL: http://product-service:8080
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USERNAME: guest
-      RABBITMQ_PASSWORD: guest
-      ASPNETCORE_URLS: http://+:8080
+      POSTGRES_HOST: "${POSTGRES_HOST:-postgres}"
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+      POSTGRES_DATABASE: "${ORDER_DATABASE:-order}"
+      POSTGRES_USERNAME: "${POSTGRES_USERNAME:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-test}"
+      PRODUCT_SERVICE_BASE_URL: "${PRODUCT_SERVICE_BASE_URL:-http://product-service:8080}"
+      RABBITMQ_HOST: "${RABBITMQ_HOST:-rabbitmq}"
+      RABBITMQ_PORT: "${RABBITMQ_PORT:-5672}"
+      RABBITMQ_USERNAME: "${RABBITMQ_USERNAME:-guest}"
+      RABBITMQ_PASSWORD: "${RABBITMQ_PASSWORD:-guest}"
+      ASPNETCORE_URLS: "http://+:${APP_INTERNAL_PORT:-8080}"
     ports:
-      - "1001:8080"
+      - "${ORDER_HOST_PORT:-1001}:${APP_INTERNAL_PORT:-8080}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -151,12 +157,15 @@ services:
       context: ../onboarding
       dockerfile: Dockerfile
     environment:
+      # Bind port for the Go HTTP server (read via APP_PORT). Kept in sync with
+      # the daprd -app-port below and the container side of the port mapping.
+      APP_PORT: "${APP_INTERNAL_PORT:-8080}"
       # The onboarding process connects to its sidecar on the default gRPC
       # port. network_mode: service:onboarding-dapr on the sidecar puts them
       # on the same loopback, so DAPR_GRPC_PORT defaults to 50001.
-      DAPR_GRPC_PORT: "50001"
+      DAPR_GRPC_PORT: "${DAPR_GRPC_PORT:-50001}"
     ports:
-      - "1002:8080"
+      - "${ONBOARDING_HOST_PORT:-1002}:${APP_INTERNAL_PORT:-8080}"
     depends_on:
       placement:
         condition: service_started
@@ -176,13 +185,13 @@ services:
       - "-app-id"
       - "onboarding"
       - "-app-port"
-      - "8080"
+      - "${APP_INTERNAL_PORT:-8080}"
       - "-dapr-grpc-port"
-      - "50001"
+      - "${DAPR_GRPC_PORT:-50001}"
       - "-placement-host-address"
-      - "placement:50006"
+      - "placement:${DAPR_PLACEMENT_PORT:-50006}"
       - "-scheduler-host-address"
-      - "scheduler:50007"
+      - "scheduler:${DAPR_SCHEDULER_PORT:-50007}"
       - "-resources-path"
       - "/dapr/components"
       - "-log-level"

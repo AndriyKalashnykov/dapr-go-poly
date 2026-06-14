@@ -1,15 +1,23 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
+#
+# Every operator-tunable value is `${VAR:-default}`-formed and documented in
+# `.env.example`. Container-internal ports of THIRD-PARTY images (postgres
+# 5432, rabbitmq 5672/15672) stay literal on the container side — those are
+# fixed by the image and only the host-side mapping is tunable. Our own
+# services (placement/scheduler/daprd/app) externalize both sides.
+
 services:
 
   placement:
     # https://github.com/dapr/dapr/pkgs/container/daprd/versions?filters%5Bversion_type%5D=tagged
     # daprio uses http by default, whyle ghcr.io uses https, can be helpful in environments with "man in the middle" Netscope etc.
     image: "daprio/dapr:1.17.4@sha256:8e4da92d1e15a7aca7ecf416947d14d5a5db83ae502283219724d9608ff0e7d1"
-    command: [
-      "./placement",
-      "--port", "50006"
-    ]
+    command:
+      - "./placement"
+      - "--port"
+      - "${DAPR_PLACEMENT_PORT:-50006}"
     ports:
-      - "50006:50006"
+      - "${DAPR_PLACEMENT_HOST_PORT:-50006}:${DAPR_PLACEMENT_PORT:-50006}"
 
   scheduler:
     # Container uses image-default user to avoid bind/volume perms coupling.
@@ -19,15 +27,18 @@ services:
     #   --etcd-client-ports   → --etcd-client-port (single uint, no per-instance mapping)
     #   --etcd-client-http-ports → removed
     #   --initial-cluster     → --etcd-initial-cluster
-    command: [
-      "./scheduler",
-      "--port", "50007",
-      "--id","scheduler-0",
-      "--etcd-data-dir", "/var/run/dapr/scheduler",
-      "--etcd-initial-cluster", "scheduler-0=http://scheduler-0:2380",
-    ]
+    command:
+      - "./scheduler"
+      - "--port"
+      - "${DAPR_SCHEDULER_PORT:-50007}"
+      - "--id"
+      - "scheduler-0"
+      - "--etcd-data-dir"
+      - "/var/run/dapr/scheduler"
+      - "--etcd-initial-cluster"
+      - "scheduler-0=http://scheduler-0:2380"
     ports:
-      - "50007:50007"
+      - "${DAPR_SCHEDULER_HOST_PORT:-50007}:${DAPR_SCHEDULER_PORT:-50007}"
     # The dapr image runs as nonroot (UID 65532) so host bind mounts and
     # default named volumes (both root-owned) can't be written to. A tmpfs
     # keeps scheduler state ephemeral — acceptable for local dev since Dapr
@@ -42,15 +53,15 @@ services:
   postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: test
-      POSTGRES_DB: product
+      POSTGRES_USER: "${POSTGRES_USERNAME:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-test}"
+      POSTGRES_DB: "${POSTGRES_DB:-product}"
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME:-postgres}"]
       interval: 2s
       timeout: 5s
       retries: 15
@@ -58,11 +69,11 @@ services:
   rabbitmq:
     image: rabbitmq:4-management-alpine
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USERNAME:-guest}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:-guest}"
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_HOST_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 5s
@@ -74,14 +85,14 @@ services:
       context: ./product-service
       dockerfile: Dockerfile
     ports:
-      - "1000:8080"
+      - "${PRODUCT_HOST_PORT:-1000}:${APP_INTERNAL_PORT:-8080}"
     environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DATABASE: product
-      POSTGRES_USERNAME: postgres
-      POSTGRES_PASSWORD: test
-      ASPNETCORE_URLS: http://+:8080
+      POSTGRES_HOST: "${POSTGRES_HOST:-postgres}"
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+      POSTGRES_DATABASE: "${PRODUCT_DATABASE:-product}"
+      POSTGRES_USERNAME: "${POSTGRES_USERNAME:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-test}"
+      ASPNETCORE_URLS: "http://+:${APP_INTERNAL_PORT:-8080}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,11 +108,11 @@ services:
       - "-app-id"
       - "product-service"
       - "-app-port"
-      - "8080"
+      - "${APP_INTERNAL_PORT:-8080}"
       - "-placement-host-address"
-      - "placement:50006"
+      - "placement:${DAPR_PLACEMENT_PORT:-50006}"
       - "-scheduler-host-address"
-      - "scheduler:50007"
+      - "scheduler:${DAPR_SCHEDULER_PORT:-50007}"
       - "-log-level"
       - "info"
     # Note: -resources-path intentionally omitted. The components under
@@ -119,19 +130,19 @@ services:
       context: ./order-service
       dockerfile: Dockerfile
     ports:
-      - "1001:8080"
+      - "${ORDER_HOST_PORT:-1001}:${APP_INTERNAL_PORT:-8080}"
     environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DATABASE: order
-      POSTGRES_USERNAME: postgres
-      POSTGRES_PASSWORD: test
-      PRODUCT_SERVICE_BASE_URL: http://product-service:8080
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USERNAME: guest
-      RABBITMQ_PASSWORD: guest
-      ASPNETCORE_URLS: http://+:8080
+      POSTGRES_HOST: "${POSTGRES_HOST:-postgres}"
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+      POSTGRES_DATABASE: "${ORDER_DATABASE:-order}"
+      POSTGRES_USERNAME: "${POSTGRES_USERNAME:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-test}"
+      PRODUCT_SERVICE_BASE_URL: "${PRODUCT_SERVICE_BASE_URL:-http://product-service:8080}"
+      RABBITMQ_HOST: "${RABBITMQ_HOST:-rabbitmq}"
+      RABBITMQ_PORT: "${RABBITMQ_PORT:-5672}"
+      RABBITMQ_USERNAME: "${RABBITMQ_USERNAME:-guest}"
+      RABBITMQ_PASSWORD: "${RABBITMQ_PASSWORD:-guest}"
+      ASPNETCORE_URLS: "http://+:${APP_INTERNAL_PORT:-8080}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -151,11 +162,11 @@ services:
       - "-app-id"
       - "order-service"
       - "-app-port"
-      - "8080"
+      - "${APP_INTERNAL_PORT:-8080}"
       - "-placement-host-address"
-      - "placement:50006"
+      - "placement:${DAPR_PLACEMENT_PORT:-50006}"
       - "-scheduler-host-address"
-      - "scheduler:50007"
+      - "scheduler:${DAPR_SCHEDULER_PORT:-50007}"
       - "-log-level"
       - "info"
     # Note: -resources-path intentionally omitted. The components under

@@ -36,3 +36,6 @@ vendor
 /onboarding/onboarding
 *.dapr_scheduler/
 
+
+# Per-developer env override (compose auto-loads it; .env.example is committed).
+.env

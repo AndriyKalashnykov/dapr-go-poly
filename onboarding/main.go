@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dapr/durabletask-go/api/protos"
@@ -148,9 +149,13 @@ func main() {
 	mux.HandleFunc("POST /onboardings/{id}/approve", s.ApproveOnboarding)
 	mux.HandleFunc("POST /onboardings/{id}/deny", s.DenyOnboarding)
 
-	fmt.Println("Starting web server on http://localhost:8080")
+	port := os.Getenv("APP_PORT")
+	if port == "" {
+		port = "8080"
+	}
+	fmt.Printf("Starting web server on http://localhost:%s\n", port)
 	srv := &http.Server{
-		Addr:              ":8080",
+		Addr:              ":" + port,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}

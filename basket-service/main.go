@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -166,7 +167,11 @@ func main() {
 	// 	return c.SendStatus(fiber.StatusNoContent)
 	// })
 
-	if err := app.Listen(":8080"); err != nil {
+	port := os.Getenv("APP_PORT")
+	if port == "" {
+		port = "8080"
+	}
+	if err := app.Listen(":" + port); err != nil {
 		log.Fatal(err)
 	}
 }

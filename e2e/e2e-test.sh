@@ -3,8 +3,8 @@
 # End-to-end test suite for dapr-go-poly.
 #
 # Assumes `make e2e` has brought up the full stack via the compose overlay:
-#   - product-service on :1000
-#   - order-service   on :1001 (with RabbitMQ consumer backed by Postgres)
+#   - product-service on ${PRODUCT_HOST_PORT} (default 1000)
+#   - order-service   on ${ORDER_HOST_PORT} (default 1001; RabbitMQ consumer backed by Postgres)
 #   - postgres, rabbitmq
 #
 # Covers the e2e requirements from the test-coverage-analysis skill:
@@ -16,12 +16,21 @@
 #
 set -euo pipefail
 
-PRODUCT_BASE="${PRODUCT_BASE:-http://localhost:1000}"
-ORDER_BASE="${ORDER_BASE:-http://localhost:1001}"
-ONBOARDING_BASE="${ONBOARDING_BASE:-http://localhost:1002}"
-RABBIT_API="${RABBIT_API:-http://localhost:15672}"
-RABBIT_USER="${RABBIT_USER:-guest}"
-RABBIT_PASS="${RABBIT_PASS:-guest}"
+# Load committed defaults from .env.example (source of truth) and an optional
+# `.env` override; `set -a` exports everything sourced so the values apply even
+# when `.env` is absent.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -f "$ROOT/.env.example" ]; then set -a; . "$ROOT/.env.example"; set +a; fi
+if [ -f "$ROOT/.env" ]; then set -a; . "$ROOT/.env"; set +a; fi
+
+# Host-side curl targets, derived from the host-port vars so a single override
+# (e.g. PRODUCT_HOST_PORT in .env) propagates here too.
+PRODUCT_BASE="${PRODUCT_BASE:-http://localhost:${PRODUCT_HOST_PORT:-1000}}"
+ORDER_BASE="${ORDER_BASE:-http://localhost:${ORDER_HOST_PORT:-1001}}"
+ONBOARDING_BASE="${ONBOARDING_BASE:-http://localhost:${ONBOARDING_HOST_PORT:-1002}}"
+RABBIT_API="${RABBIT_API:-http://localhost:${RABBITMQ_MGMT_HOST_PORT:-15672}}"
+RABBIT_USER="${RABBIT_USER:-${RABBITMQ_USERNAME:-guest}}"
+RABBIT_PASS="${RABBIT_PASS:-${RABBITMQ_PASSWORD:-guest}}"
 READINESS_TIMEOUT="${READINESS_TIMEOUT:-60}"
 
 PASS=0

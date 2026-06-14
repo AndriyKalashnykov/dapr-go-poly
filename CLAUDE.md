@@ -64,6 +64,7 @@ docs/diagrams/                       # C4-PlantUML sources + rendered PNGs
 .mise.toml                           # Project-local Go pin (matches go.mod)
 .golangci.yml                        # Go lint config (gocritic/gosec/etc.)
 .trivyignore                         # Trivy suppressions (with justification)
+.env.example                         # Committed source-of-truth for operator-tunable env vars (ports, creds, hosts); .env is the gitignored override
 dapr-go-poly.slnx                    # .NET solution file (modern XML format)
 docker-compose.yml                   # Base compose (Dapr + Postgres + RabbitMQ + services)
 global.json                          # .NET SDK version pin
@@ -79,7 +80,7 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to `main`, tag
 - **build** job (needs changes + static-check): Checkout, Install mise (Go + CLI toolchain), Set up .NET, `make build`
 - **test** job (needs changes + static-check): Checkout, Install mise (Go + CLI toolchain), Set up .NET, `make test`
 - **integration-test** job (needs changes + static-check; skipped under act via `vars.ACT`): Install mise (Go) + Set up .NET, `make integration-test` (TUnit + Testcontainers). No Dapr sidecar — onboarding's Dapr workflow lifecycle is exercised by the e2e job instead
-- **e2e** job (needs build + test; skipped under act): `make e2e` — brings up 9 containers (Dapr control plane + Redis state store + postgres + rabbitmq + 3 app services + onboarding sidecar), runs 16 curl-based assertions including the full onboarding async workflow lifecycle (POST 202 → approve/deny → poll GET status), captures compose logs on failure
+- **e2e** job (needs build + test; skipped under act): `make e2e` — brings up 9 containers (Dapr control plane + Redis state store + postgres + rabbitmq + 3 app services + onboarding sidecar), runs 21 curl-based assertions including the full onboarding async workflow lifecycle (POST 202 → approve/deny → poll GET status), captures compose logs on failure
 - **docker** job (needs changes + static-check + build + test): Checkout, Install mise (Go) + Set up .NET, `make image-build` (job-level `if` gates on tag `v*`)
 - **ci-pass** job (aggregator, `if: always()`, needs all upstream jobs incl. `changes`): Verifies all upstream jobs passed (treats `skipped` as pass) — use as branch-protection required check
 
@@ -87,6 +88,7 @@ A cleanup workflow (`.github/workflows/cleanup-runs.yml`) weekly removes old wor
 
 ## Development Conventions
 
+- Operator-tunable values (ports, Postgres/RabbitMQ creds + hosts, db names, Dapr control-plane/sidecar ports) are externalized to env vars with `${VAR:-default}` fallbacks, mirrored in `.env.example`. Compose, the e2e script, and the Makefile (`?=`) all read them. Go services bind `APP_PORT` (default 8080); `.NET` uses `ASPNETCORE_URLS`. Third-party image container-internal ports (postgres 5432, rabbitmq 5672/15672, redis 6379) stay literal — image-fixed, only the host mapping is tunable
 - Go services use standard `go build` / `go test` toolchain; `golangci-lint` config in `.golangci.yml` enables gocritic/gosec/errorlint/bodyclose/noctx/misspell
 - .NET services use `dotnet build` / `dotnet format` with `TreatWarningsAsErrors` enabled
 - **.NET tests use TUnit** (portfolio-wide hard requirement per `rules/dotnet/testing.md`). Run via `dotnet run --project <TestProject>` (native Microsoft.Testing.Platform entry point), NOT `dotnet test`. Fixtures use `[ClassDataSource<T>(Shared = SharedType.PerClass)]` + `IAsyncInitializer`/`IAsyncDisposable`. Assertions are async — always `await Assert.That(...)`. Mocking: FakeItEasy

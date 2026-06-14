@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1.6
 #
 # Multi-stage build for the onboarding Go service.
-# Stage 1 pins the Go version to match .mise.toml / go.mod (1.26.2); keep in
+# Stage 1 pins the Go version to match .mise.toml / go.mod (1.26.4); keep in
 # sync manually or let Renovate bump via the Docker image tag.
 #
 # Final stage uses distroless nonroot (UID 65532) so the image runs under
 # restricted K8s PodSecurity without extra annotations.
 
 # renovate: datasource=docker depName=golang
-FROM golang:1.26.2-alpine AS build
+FROM golang:1.26.4-alpine AS build
 WORKDIR /src
 
 # Restore as a distinct layer so go.mod/go.sum changes invalidate less

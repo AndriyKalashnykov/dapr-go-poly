@@ -3,4 +3,4 @@
 # Without this file, mise falls back to the user-global config, which drifts.
 [tools]
 # renovate: datasource=golang-version depName=go
-go = "1.26.2"
+go = "1.26.4"

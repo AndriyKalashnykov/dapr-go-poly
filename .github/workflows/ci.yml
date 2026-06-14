@@ -32,6 +32,8 @@ on:
       - '**/*.gif'
       - '**/*.svg'
   workflow_call:
+  workflow_dispatch:   # manual re-trigger; also resurrects the workflow if a
+                       # run-cleanup ever leaves it in GitHub state=deleted
 
 permissions:
   contents: read

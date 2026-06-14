@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
 [![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://app.renovatebot.com/dashboard#github/AndriyKalashnykov/dapr-go-poly)
 
-# Dapr Go Poly
+# Polyglot Dapr Reference — Go + .NET on Dapr
 
-A polyglot microservices project using [Dapr](https://dapr.io/) with Go and .NET services, orchestrated via Docker Compose. Demonstrates service invocation, pub/sub messaging, and state management across multiple language runtimes.
+Reference implementation of a polyglot microservice stack on [Dapr](https://dapr.io/): Go (Fiber + Dapr durable **Workflow**) and .NET 10 (EF Core) services. The **runtime surface** exercises Dapr durable workflows (onboarding's async approve/deny lifecycle on a Redis actor state store), HTTP service invocation, and a RabbitMQ → consumer → **Postgres** async order pipeline across **Postgres** and **RabbitMQ**; the **delivery surface** covers a `mise`-pinned toolchain, a composite `make static-check` gate (golangci-lint, hadolint, govulncheck, Trivy, gitleaks, actionlint, C4-PlantUML diagram-drift), a three-layer test pyramid (unit, **Testcontainers** integration via TUnit, a 21-assertion Docker Compose e2e), and a Renovate-managed GitHub Actions pipeline.
 
 <p align="center"><img src="docs/diagrams/out/c4-context.png" alt="C4 Context diagram" width="220"></p>
 
@@ -13,13 +13,13 @@ A polyglot microservices project using [Dapr](https://dapr.io/) with Go and .NET
 |-----------|-----------|-----------|
 | Go services | Go 1.26+ (`basket-service`, `onboarding`) | Low-overhead runtime well suited to sidecar-fronted microservices |
 | .NET services | .NET 10 (`order-service`, `product-service`) | LTS runtime with first-class Dapr SDK support |
-| Service mesh | Dapr 1.17 (sidecar model) | Decouples service-to-service concerns (invoke, pub/sub, state) from application code |
+| Runtime (Dapr) | Dapr 1.17 (sidecar model) | Decouples service-to-service concerns (invoke, workflow, state) from application code |
 | Orchestration | Docker Compose (full stack); KinD scaffolding for K8s validation | Compose is the authoritative e2e path; `make e2e-kind` exists for future manifest-level validation |
-| Persistence | Postgres 17 (per-service schema), RabbitMQ 3 (order consumer) | Matches the docker-compose local-dev topology one-to-one with production intent |
+| Persistence | Postgres 18 (per-service schema), RabbitMQ 4 (order consumer), Redis 8 (Dapr workflow actor state store) | Matches the docker-compose local-dev topology one-to-one with production intent |
 | Static analysis | `golangci-lint` (gosec/gocritic/errorlint/bodyclose/noctx), `dotnet format --verify`, `govulncheck`, `hadolint`, `trivy fs`, `gitleaks`, `actionlint` | Multi-language gate bundled behind `make static-check`; catches lint, CVEs, secrets, Dockerfile issues, and workflow drift |
 | CI | GitHub Actions (`static-check` → `build`/`test`/`integration-test` → `e2e` → `docker` on tag) | Composite `static-check` keeps quality gates in one target; `ci-pass` aggregator simplifies branch protection |
 | Local CI | [act](https://github.com/nektos/act) `0.2.87` | Reproduce CI locally; pinned in `.mise.toml` |
-| Dependency updates | Renovate (platform automerge) | Single `customManagers` regex tracks every Makefile `# renovate:` comment — no per-tool config drift |
+| Dependency updates | Renovate (PR automerge) | Native `mise` manager tracks the `.mise.toml` toolchain; `customManagers` track the Makefile/workflow pins, `kindest/node` image, and C4-PlantUML `!include`; built-in managers cover go.mod/NuGet/Dockerfile/compose/Actions |
 
 ## Quick Start
 

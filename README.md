@@ -7,7 +7,7 @@
 
 A polyglot microservices project using [Dapr](https://dapr.io/) with Go and .NET services, orchestrated via Docker Compose. Demonstrates service invocation, pub/sub messaging, and state management across multiple language runtimes.
 
-<p align="center"><img src="docs/diagrams/out/c4-context.png" alt="C4 Context diagram" width="420"></p>
+<p align="center"><img src="docs/diagrams/out/c4-context.png" alt="C4 Context diagram" width="220"></p>
 
 | Component | Technology | Rationale |
 |-----------|-----------|-----------|

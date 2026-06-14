@@ -61,6 +61,9 @@ jobs:
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
         if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
           install: true
           cache: true
 
@@ -96,6 +99,9 @@ jobs:
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
         if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
           install: true
           cache: true
 
@@ -131,6 +137,9 @@ jobs:
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
         if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
           install: true
           cache: true
 
@@ -170,6 +179,9 @@ jobs:
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
         if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
           install: true
           cache: true
 
@@ -234,6 +246,9 @@ jobs:
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
         if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
+          # Pin the mise version — mise.jdx.dev/VERSION can lead the published
+          # GitHub release assets (a `latest` resolve 404s mid-publish).
+          version: "2026.6.6"
           install: true
           cache: true
 

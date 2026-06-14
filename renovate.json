@@ -32,7 +32,7 @@
       "description": "Update Makefile tool versions via inline renovate comments",
       "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)( versioning=(?<versioning>[^\\s]+))?\\n[A-Z_]+\\s*:=\\s*(?<currentValue>v?\\d[\\w.+-]*)"
+        "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)(?: extractVersion=(?<extractVersion>[^\\s]+))?(?: registryUrl=(?<registryUrl>[^\\s]+))?(?: versioning=(?<versioning>[^\\s]+))?\\n[A-Z0-9_]+\\s*[?:]?=\\s*(?<currentValue>v?\\d[\\w.+-]*)"
       ]
     },
     {
@@ -127,6 +127,44 @@
         "custom.regex"
       ],
       "groupName": "Makefile tools"
+    },
+    {
+      "description": "Disable digest pinning for the Makefile's docker-datasource pins (PLANTUML_VERSION, KIND_NODE_IMAGE). config:best-practices' docker:pinDigests otherwise generates a pinDigest update that collides with the version bump in renovate/makefile-tools and SILENTLY DROPS it (verified: plantuml 1.2026.2->1.2026.6 and kindest/node v1.35.0->v1.36.1 were both being dropped). Scoped by file+datasource (NOT matchManagers — the AND can void on the regex-vs-custom.regex name). KIND_NODE_IMAGE keeps its existing-digest refresh; this only suppresses pin-where-absent.",
+      "matchFileNames": [
+        "Makefile"
+      ],
+      "matchDatasources": [
+        "docker"
+      ],
+      "pinDigests": false
+    },
+    {
+      "description": "Hold mise aqua/github-tags tool bumps for 3 days so the upstream GitHub Release artifacts that mise's aqua: backend installs are published before the PR opens — prevents the tag-before-publish 404 across ALL aqua tools (act, dapr, hadolint, golangci-lint, trivy, gitleaks, actionlint, shellcheck, kind). Scoped to github-tags so go/node version pins are unaffected.",
+      "matchManagers": [
+        "mise"
+      ],
+      "matchDatasources": [
+        "github-tags"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Pair the kind binary (.mise.toml, github-tags) with the kindest/node image (Makefile, docker) so a KinD bump and its matching node image land together — each KinD release publishes a matching node image tag.",
+      "matchPackageNames": [
+        "kubernetes-sigs/kind",
+        "kindest/node"
+      ],
+      "groupName": "KinD"
+    },
+    {
+      "description": "kindest/node: take version bumps (each brings its own digest) but suppress standalone digest-refresh updates — a digest refresh of the current tag otherwise collides with and silently drops the version bump in the grouped branch (verified: v1.35.0->v1.36.1 was being dropped).",
+      "matchPackageNames": [
+        "kindest/node"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "enabled": false
     },
     {
       "description": "Group .NET Docker images, disable major updates",

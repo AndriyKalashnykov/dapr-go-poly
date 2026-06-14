@@ -1,42 +1,22 @@
 name: CI
 
 on:
+  # No trigger-level paths-ignore — doc-only skipping is handled by the
+  # `changes` detector job below (dorny/paths-filter) + per-job `if:` gates.
+  # Trigger-level path filters deadlock with Repository Rulesets and silently
+  # mishandle the `!CLAUDE.md` re-include; the changes-detector pattern is the
+  # portfolio standard and is Rulesets-safe.
   push:
     branches: [main]
     tags: ['v*']
-    paths-ignore:
-      - '**/*.md'
-      - '!CLAUDE.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - '.claudeignore'
-      - '.claude/**'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
   pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - '!CLAUDE.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - '.claudeignore'
-      - '.claude/**'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
   workflow_call:
   workflow_dispatch:   # manual re-trigger; also resurrects the workflow if a
                        # run-cleanup ever leaves it in GitHub state=deleted
 
 permissions:
   contents: read
+  pull-requests: read   # dorny/paths-filter's listFiles() on pull_request events
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,7 +24,32 @@ concurrency:
 
 jobs:
 
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      # On tag pushes the tag SHA usually equals main's tip, so the path
+      # filter sees an empty diff and returns code=false — which would skip
+      # the whole release pipeline. Force code=true on tags (§15g single-touch).
+      code: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        id: filter
+        with:
+          # On push events act needs an explicit base (its synthetic event omits
+          # repository.default_branch); on pull_request the action uses the PR
+          # base and IGNORES this input, so gate it to push only.
+          base: ${{ github.event_name == 'push' && 'main' || '' }}
+          filters: |
+            code:
+              - '!(**.md|docs/**|specs/**|LICENSE|.gitignore|.claudeignore|.claude/**|benchmarks/**|**.png|**.jpg|**.gif|**.svg)'
+              - 'CLAUDE.md'
+              - 'docs/diagrams/**/*.puml'
+
   static-check:
+    needs: [changes]
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -71,7 +76,8 @@ jobs:
         run: make static-check
 
   build:
-    needs: [static-check]
+    needs: [changes, static-check]
+    if: ${{ !failure() && !cancelled() && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -98,7 +104,8 @@ jobs:
         run: make build
 
   test:
-    needs: [static-check]
+    needs: [changes, static-check]
+    if: ${{ !failure() && !cancelled() && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -129,8 +136,8 @@ jobs:
     # spawns sibling docker containers from within the job runner, which
     # requires host-docker-socket + docker-in-docker semantics that act
     # emulates poorly. Ran by real GitHub Actions runners where it works.
-    if: ${{ vars.ACT != 'true' }}
-    needs: [static-check]
+    if: ${{ vars.ACT != 'true' && !failure() && !cancelled() && needs.changes.outputs.code == 'true' }}
+    needs: [changes, static-check]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -165,8 +172,8 @@ jobs:
   e2e:
     # Same rationale as integration-test — needs full docker-in-docker for
     # compose up, which act cannot provide without privileged socket mounts.
-    if: ${{ vars.ACT != 'true' }}
-    needs: [build, test]
+    if: ${{ vars.ACT != 'true' && !failure() && !cancelled() && needs.changes.outputs.code == 'true' }}
+    needs: [changes, build, test]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -187,8 +194,8 @@ jobs:
     # but the single `Build image` step was step-gated, wasting ~15s of runner
     # setup on every non-tag push. Keeping the job in `needs:` of ci-pass is
     # fine — ci-pass treats `skipped` as pass.
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: [static-check, build, test]
+    if: ${{ !failure() && !cancelled() && startsWith(github.ref, 'refs/tags/') }}
+    needs: [changes, static-check, build, test]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -207,7 +214,7 @@ jobs:
     # Mirror the gating of integration-test/e2e so ci-pass can still succeed
     # under act (where those two jobs are intentionally skipped).
     if: ${{ always() }}
-    needs: [static-check, build, test, integration-test, e2e, docker]
+    needs: [changes, static-check, build, test, integration-test, e2e, docker]
     runs-on: ubuntu-latest
     steps:
       - name: Verify all upstream jobs passed

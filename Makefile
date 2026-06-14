@@ -1,5 +1,8 @@
 .DEFAULT_GOAL := help
 
+# bash (not the default /bin/sh) so `set -o pipefail` and bash-isms work in recipes.
+SHELL := /bin/bash
+
 export PATH := $(HOME)/.local/bin:$(PATH)
 
 APP_NAME       := dapr-go-poly
@@ -204,7 +207,7 @@ deps-kind:
 		chmod +x $$HOME/.local/bin/kind; \
 	}
 
-#kind-up: @ Create a KinD cluster and install Dapr + MetalLB
+#kind-up: @ Create a KinD cluster and install Dapr (cloud-provider-kind for LoadBalancer IPs)
 kind-up: deps-kind
 	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl required. See https://kubernetes.io/docs/tasks/tools/"; exit 1; }
 	@command -v dapr >/dev/null 2>&1 || { echo "Error: Dapr CLI required. See https://docs.dapr.io/getting-started/install-dapr-cli/"; exit 1; }
@@ -216,7 +219,7 @@ kind-up: deps-kind
 kind-down:
 	@kind delete cluster --name $(APP_NAME) || true
 
-#e2e-kind: @ K8s e2e (KinD + Dapr + MetalLB) — scaffolding; see e2e/k8s/README.md
+#e2e-kind: @ K8s e2e (KinD + Dapr + cloud-provider-kind) — scaffolding; see e2e/k8s/README.md
 e2e-kind: kind-up
 	@echo ""
 	@echo "=== e2e-kind scaffolding ==="
@@ -226,8 +229,10 @@ e2e-kind: kind-up
 	@echo ""
 	@echo "  1. Add Deployment + Service manifests for product/order-service"
 	@echo "     with Dapr sidecar injection annotations under e2e/k8s/."
-	@echo "  2. Add MetalLB for LoadBalancer IPs (so curl can reach services"
-	@echo "     from the host)."
+	@echo "  2. Run cloud-provider-kind (host-side daemon on the kind Docker"
+	@echo "     network) for LoadBalancer IPs so curl can reach services from"
+	@echo "     the host. cloud-provider-kind is the portfolio-supported LB"
+	@echo "     controller (not MetalLB)."
 	@echo "  3. Add Dapr Components (statestore/pubsub) pointing at in-cluster"
 	@echo "     Redis (or the existing .iac/dapr/local/ components migrated)."
 	@echo "  4. Apply manifests: kubectl apply -f e2e/k8s/"
@@ -289,7 +294,7 @@ vulncheck: deps deps-govulncheck
 		echo "Vuln-checking $$svc..."; \
 		(cd $$svc && govulncheck ./...) || exit 1; \
 	done
-	@for svc in $(DOTNET_SERVICES); do \
+	@set -o pipefail; for svc in $(DOTNET_SERVICES); do \
 		echo "Vuln-checking $$svc..."; \
 		(cd $$svc && dotnet list package --vulnerable --include-transitive 2>&1 | tee /tmp/vuln-$$svc.log; \
 			grep -qE '(>|has the following vulnerable)' /tmp/vuln-$$svc.log && { echo "Vulnerable packages found in $$svc"; exit 1; } || true) || exit 1; \
@@ -321,8 +326,22 @@ diagrams-check: diagrams
 	fi; \
 	echo "Diagrams match sources."
 
-#static-check: @ Composite quality gate (lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
-static-check: lint-ci lint vulncheck secrets trivy-fs diagrams-check deps-prune-check
+#check-go-alignment: @ Verify the Go version matches across .mise.toml, go.mod files, and onboarding/Dockerfile
+check-go-alignment:
+	@mise_v=$$(grep -oE 'go = "[0-9]+\.[0-9]+\.[0-9]+"' .mise.toml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \
+	[ -n "$$mise_v" ] || { echo "ERROR: could not read Go version from .mise.toml"; exit 1; }; \
+	fail=0; \
+	for f in $(addsuffix /go.mod,$(GO_SERVICES)); do \
+		gm=$$(grep -oE '^go [0-9]+\.[0-9]+\.[0-9]+' $$f | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \
+		[ "$$gm" = "$$mise_v" ] || { echo "Go version mismatch: $$f=$$gm vs .mise.toml=$$mise_v"; fail=1; }; \
+	done; \
+	dk=$$(grep -oE 'FROM golang:[0-9]+\.[0-9]+\.[0-9]+' onboarding/Dockerfile | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \
+	[ "$$dk" = "$$mise_v" ] || { echo "Go version mismatch: onboarding/Dockerfile=$$dk vs .mise.toml=$$mise_v"; fail=1; }; \
+	[ $$fail -eq 0 ] || exit 1; \
+	echo "Go version aligned at $$mise_v across .mise.toml, go.mod, onboarding/Dockerfile."
+
+#static-check: @ Composite quality gate (check-go-alignment + lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
+static-check: check-go-alignment lint-ci lint vulncheck secrets trivy-fs diagrams-check deps-prune-check
 
 #update: @ Update all dependencies to latest versions
 update: deps
@@ -377,7 +396,7 @@ image-build: build
 
 #dapr-run: @ Run order-service locally via the Dapr CLI (host networking)
 dapr-run: deps
-	@cd order-service && dapr run --app-id product-service --app-port 8080 --placement-host-address host.docker.internal:50006 --dapr-http-port 3500
+	@cd order-service && dapr run --app-id order-service --app-port 8080 --placement-host-address host.docker.internal:50006 --dapr-http-port 3500
 
 #compose-down: @ Stop and remove Docker Compose services
 compose-down:
@@ -429,7 +448,7 @@ renovate-validate: renovate-bootstrap
 		npx --yes renovate --platform=local; \
 	fi
 
-.PHONY: help deps deps-act deps-hadolint deps-govulncheck deps-mise deps-kind deps-golangci deps-trivy deps-gitleaks deps-actionlint deps-shellcheck clean format build test integration-test e2e e2e-kind kind-up kind-down lint lint-ci trivy-fs secrets vulncheck static-check diagrams diagrams-clean diagrams-check update \
+.PHONY: help deps deps-act deps-hadolint deps-govulncheck deps-mise deps-kind deps-golangci deps-trivy deps-gitleaks deps-actionlint deps-shellcheck clean format build test integration-test e2e e2e-kind kind-up kind-down lint lint-ci trivy-fs secrets vulncheck check-go-alignment static-check diagrams diagrams-clean diagrams-check update \
 	deps-prune deps-prune-check \
 	image-build dapr-run compose-down compose-up \
 	ci ci-run release \

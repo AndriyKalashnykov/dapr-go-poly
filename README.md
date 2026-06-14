@@ -38,7 +38,7 @@ make compose-up        # bring up full stack (postgres + rabbitmq + services + D
 |-------|--------|-------|--------------|
 | **Unit** | `make test` | seconds | None — pure Go/FluentValidation logic |
 | **Integration** | `make integration-test` | tens of seconds | Testcontainers (Postgres, RabbitMQ); .NET uses [TUnit](https://github.com/thomhurst/TUnit) + `WebApplicationFactory` via `dotnet run` (Microsoft.Testing.Platform). Go integration tests are unit-test shape using a hand-rolled `workflowClient` fake — Dapr sidecar interactions are covered by e2e, not here |
-| **E2E** | `make e2e` | ~3–5 min | Self-contained `e2e/docker-compose.e2e.yml` (placement + scheduler + redis + postgres + rabbitmq + product-service + order-service + onboarding + its Dapr sidecar loaded with `e2e/dapr/components/statestore.yaml`). 21 curl-based assertions covering: CRUD + validation on product-service, JSON-array reachability on order-service, RabbitMQ → OrdersConsumer → Postgres async pipeline, onboarding async approve (POST → approve → poll `GET /onboardings/{id}` until `status=Completed`), denial (POST → deny → poll until `status=Failed` + `error` contains `not approved`), and the approve/deny error paths on unknown instance ids (502 from the Dapr sidecar) |
+| **E2E** | `make e2e` | ~3–5 min | Self-contained `e2e/docker-compose.e2e.yml` (placement + scheduler + redis + postgres + rabbitmq + product-service + order-service + onboarding + its Dapr sidecar loaded with `e2e/dapr/components/statestore.yaml`). 16 curl-based assertions covering: CRUD + validation on product-service, JSON-array reachability on order-service, RabbitMQ → OrdersConsumer → Postgres async pipeline, onboarding async approve (POST → approve → poll `GET /onboardings/{id}` until `status=Completed`), denial (POST → deny → poll until `status=Failed` + `error` contains `not approved`), and the approve/deny error paths on unknown instance ids (502 from the Dapr sidecar) |
 
 ## Prerequisites
 
@@ -49,12 +49,12 @@ make compose-up        # bring up full stack (postgres + rabbitmq + services + D
 | [Go](https://go.dev/dl/) | 1.26+ | Go services (basket-service, onboarding) |
 | [.NET SDK](https://dotnet.microsoft.com/download) | 10.0+ | .NET services (order-service, product-service) |
 | [Docker](https://www.docker.com/) | latest | Container builds and Compose orchestration |
-| [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/) | 1.17.0 | Local Dapr runtime (optional) |
+| [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/) | 1.17.1 | Local Dapr runtime (optional) |
 | [act](https://github.com/nektos/act) | 0.2.87 | Run GitHub Actions locally (installed by `make deps-act`) |
 | [hadolint](https://github.com/hadolint/hadolint) | 2.14.0 | Dockerfile linter (installed by `make deps-hadolint`) |
 | [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) | 1.1.4 | Go vulnerability scanner (installed by `make deps-govulncheck`) |
 | [mise](https://mise.jdx.dev/) | latest | Cross-language version manager (installed by `make deps-mise`; used by `renovate-bootstrap`) |
-| [KinD](https://kind.sigs.k8s.io/) | 0.25.0 | Kubernetes-in-Docker for `make e2e-kind` (optional; installed by `make deps-kind`) |
+| [KinD](https://kind.sigs.k8s.io/) | 0.31.0 | Kubernetes-in-Docker for `make e2e-kind` (optional; installed by `make deps-kind`) |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | matching KinD node image | Required by `make e2e-kind` (optional) |
 
 Install all required dependencies:
@@ -123,7 +123,7 @@ Run `make help` to see all available targets.
 | `make vulncheck` | Run vulnerability scanners (govulncheck + dotnet list package --vulnerable) |
 | `make trivy-fs` | Trivy filesystem scan (CVEs + secrets + misconfigurations) |
 | `make secrets` | Gitleaks scan for leaked secrets in git history |
-| `make static-check` | Composite quality gate (lint-ci + lint + vulncheck + secrets + trivy-fs + deps-prune-check) |
+| `make static-check` | Composite quality gate (check-go-alignment + lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check) |
 
 ### Docker
 
@@ -138,7 +138,7 @@ Run `make help` to see all available targets.
 | Target | Description |
 |--------|-------------|
 | `make deps-kind` | Install [KinD](https://kind.sigs.k8s.io/) (user-local) |
-| `make kind-up` | Create a KinD cluster and install Dapr + MetalLB |
+| `make kind-up` | Create a KinD cluster and install Dapr (cloud-provider-kind for LoadBalancer IPs) |
 | `make kind-down` | Tear down the KinD cluster |
 | `make e2e-kind` | K8s e2e scaffolding; see [`e2e/k8s/README.md`](e2e/k8s/README.md) for the manifest TODO list |
 
@@ -167,11 +167,12 @@ Run `make help` to see all available targets.
 
 ## CI/CD
 
-GitHub Actions runs on every push to `main`, tags `v*`, and pull requests (paths-ignored: `*.md`, `docs/**`, `LICENSE`, `.gitignore`).
+GitHub Actions runs on every push to `main`, tags `v*`, pull requests, `workflow_call`, and `workflow_dispatch` (manual re-trigger). A `changes` detector job (`dorny/paths-filter`) skips the heavy jobs on doc-only changes (markdown, `docs/**`, license, dotfiles, image assets) while always re-including `CLAUDE.md` and `docs/diagrams/**/*.puml` as code.
 
 | Job | Triggers | Steps |
 |-----|----------|-------|
-| **static-check** | push (main, tags), PR | `make static-check` (lint + vulncheck + deps-prune-check) |
+| **changes** | every event | `dorny/paths-filter` — gates heavy jobs on whether code (vs docs) changed |
+| **static-check** | code changed | `make static-check` (check-go-alignment + lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check) |
 | **build** | after static-check passes | `make build` |
 | **test** | after static-check passes | `make test` (unit) |
 | **integration-test** | after static-check passes | `make integration-test` (Testcontainers Postgres + RabbitMQ) |
@@ -179,9 +180,9 @@ GitHub Actions runs on every push to `main`, tags `v*`, and pull requests (paths
 | **docker** | after static-check + build + test | `make image-build` (executes only on tag `v*`) |
 | **ci-pass** | aggregator, `if: always()` | Verifies all upstream jobs passed — use as branch-protection required check |
 
-A weekly cleanup workflow removes old workflow runs (retains 7 days, minimum 5 runs).
+A weekly cleanup workflow removes old workflow runs (retains 7 days, minimum 5 runs **per workflow** so a low-frequency workflow is never fully purged) and prunes caches from deleted branches.
 
-[Renovate](https://docs.renovatebot.com/) keeps dependencies up to date with platform automerge enabled. A single `customManagers` regex in `renovate.json` tracks every Makefile constant annotated with a `# renovate:` comment — no per-tool config drift.
+[Renovate](https://docs.renovatebot.com/) keeps dependencies up to date with PR automerge enabled. `customManagers` regexes in `renovate.json` track the Makefile constants annotated with `# renovate:` comments, the `kindest/node` image (tag + digest), and the C4-PlantUML `!include` version — no per-tool config drift. The Go toolchain (mirrored across `go.mod`, `onboarding/Dockerfile`, and `.mise.toml`) is grouped so a patch bump lands in one PR, guarded by `make check-go-alignment`.
 
 ## Contributing
 

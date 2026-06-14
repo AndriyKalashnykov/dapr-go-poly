@@ -23,7 +23,7 @@ make trivy-fs          # Trivy filesystem scan (CVEs + secrets + misconfigs)
 make secrets           # Gitleaks scan for leaked secrets
 make diagrams          # Render C4-PlantUML sources under docs/diagrams/ to PNG
 make diagrams-check    # Verify committed PNGs match .puml sources (CI drift gate)
-make static-check      # Composite quality gate (lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
+make static-check      # Composite quality gate (check-go-alignment + lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
 make format        # Auto-fix formatting (Go + .NET)
 make clean         # Remove build artifacts
 make ci            # Full local CI pipeline (format, static-check, test, build)
@@ -36,6 +36,7 @@ make ci-run        # Run GitHub Actions locally via act (randomized artifact por
 |----------|-------|---------|
 | `ACT_VERSION` | `0.2.87` | Pinned act version for local CI |
 | `DAPR_VERSION` | `1.17.1` | Pinned Dapr CLI version |
+| `DAPR_RUNTIME_VERSION` | `1.17.4` | Pinned Dapr runtime version for `make kind-up` (`dapr init -k --runtime-version`) |
 | `HADOLINT_VERSION` | `2.14.0` | Pinned hadolint version for Dockerfile linting |
 | `GOVULNCHECK_VERSION` | `1.1.4` | Pinned govulncheck version for Go CVE scanning |
 | `GOLANGCI_VERSION` | `2.11.4` | Pinned golangci-lint version (gocritic/gosec/errorlint/bodyclose/noctx) |
@@ -80,16 +81,17 @@ LICENSE                              # MIT
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to `main`, tags `v*`, pull requests, and `workflow_call` (paths-ignore: `**/*.md`, `docs/**`, `LICENSE`, `.gitignore`):
-- **static-check** job: Checkout, Set up Go, Set up .NET, `make static-check` (lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
-- **build** job (needs static-check): Checkout, Set up Go, Set up .NET, `make build`
-- **test** job (needs static-check): Checkout, Set up Go, Set up .NET, `make test`
-- **integration-test** job (needs static-check; skipped under act via `vars.ACT`): Set up Go/.NET, `make integration-test` (TUnit + Testcontainers). No Dapr sidecar — onboarding's Dapr workflow lifecycle is exercised by the e2e job instead
-- **e2e** job (needs build + test; skipped under act): `make e2e` — brings up 9 containers (Dapr control plane + Redis state store + postgres + rabbitmq + 3 app services + onboarding sidecar), runs 21 curl-based assertions including the full onboarding async workflow lifecycle (POST 202 → approve/deny → poll GET status), captures compose logs on failure
-- **docker** job (needs static-check + build + test): Checkout, Set up .NET, `make image-build` (step-level `if` gates on tag `v*`)
-- **ci-pass** job (aggregator, `if: always()`): Verifies all upstream jobs passed (treats `skipped` as pass) — use as branch-protection required check
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to `main`, tags `v*`, pull requests, `workflow_call`, and `workflow_dispatch`. Instead of trigger-level `paths-ignore`, a **`changes` detector job** (`dorny/paths-filter`) gates the heavy jobs: doc-only changes (markdown, `docs/**`, license, dotfiles, image assets) skip them, while `CLAUDE.md` and `docs/diagrams/**/*.puml` are explicitly re-included as code (so `diagrams-check` still gates `.puml` edits). On tag pushes `changes.outputs.code` is forced `true` so the release pipeline never silently no-ops:
+- **changes** job: `dorny/paths-filter` — every heavy job `needs: [changes]` + `if: needs.changes.outputs.code == 'true'`
+- **static-check** job: Checkout, Set up Go, Set up .NET, `make static-check` (check-go-alignment + lint-ci + lint + vulncheck + secrets + trivy-fs + diagrams-check + deps-prune-check)
+- **build** job (needs changes + static-check): Checkout, Set up Go, Set up .NET, `make build`
+- **test** job (needs changes + static-check): Checkout, Set up Go, Set up .NET, `make test`
+- **integration-test** job (needs changes + static-check; skipped under act via `vars.ACT`): Set up Go/.NET, `make integration-test` (TUnit + Testcontainers). No Dapr sidecar — onboarding's Dapr workflow lifecycle is exercised by the e2e job instead
+- **e2e** job (needs build + test; skipped under act): `make e2e` — brings up 9 containers (Dapr control plane + Redis state store + postgres + rabbitmq + 3 app services + onboarding sidecar), runs 16 curl-based assertions including the full onboarding async workflow lifecycle (POST 202 → approve/deny → poll GET status), captures compose logs on failure
+- **docker** job (needs changes + static-check + build + test): Checkout, Set up .NET, `make image-build` (job-level `if` gates on tag `v*`)
+- **ci-pass** job (aggregator, `if: always()`, needs all upstream jobs incl. `changes`): Verifies all upstream jobs passed (treats `skipped` as pass) — use as branch-protection required check
 
-A cleanup workflow (`.github/workflows/cleanup-runs.yml`) removes old workflow runs weekly (also supports `workflow_dispatch`).
+A cleanup workflow (`.github/workflows/cleanup-runs.yml`) weekly removes old workflow runs — keeping the newest `KEEP_MINIMUM` **per workflow** so a low-frequency workflow is never fully purged (a global minimum would flip the CI workflow to GitHub `state=deleted`) — and prunes caches from deleted branches. Also supports `workflow_dispatch`.
 
 ## Development Conventions
 

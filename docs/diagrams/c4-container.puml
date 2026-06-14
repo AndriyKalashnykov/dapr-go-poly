@@ -25,11 +25,11 @@ System_Boundary(sys, "dapr-go-poly") {
   Container(onboard, "onboarding",      "Go 1.26, Dapr Workflow",             "Orchestrates onboarding with manual approve/deny via Dapr durable workflows.")
   Container(basket,  "basket-service",  "Go 1.26, Fiber (routes WIP)",        "Scaffold for a future Dapr-fronted basket API.")
 
-  Container(placement, "dapr-placement",  "Dapr 1.17.3",  "Actor placement for Dapr workflows.")
-  Container(scheduler, "dapr-scheduler",  "Dapr 1.17.3",  "Job scheduler for Dapr workflows; embedded etcd on tmpfs.")
+  Container(placement, "dapr-placement",  "Dapr 1.17.4",  "Actor placement for Dapr workflows.")
+  Container(scheduler, "dapr-scheduler",  "Dapr 1.17.4",  "Job scheduler for Dapr workflows; embedded etcd on tmpfs.")
 
-  ContainerDb(pg,    "postgres",   "Postgres 17",               "Per-service schemas: 'product' (products), 'order' (orders).")
-  ContainerDb(mq,    "rabbitmq",   "RabbitMQ 3 (management)",   "Durable queue 'orders'; order-service consumes.")
+  ContainerDb(pg,    "postgres",   "Postgres 18",               "Per-service schemas: 'product' (products), 'order' (orders).")
+  ContainerDb(mq,    "rabbitmq",   "RabbitMQ 4 (management)",   "Durable queue 'orders'; order-service consumes.")
 }
 
 Rel(dev, product, "CRUD products", "HTTP / JSON :1000")

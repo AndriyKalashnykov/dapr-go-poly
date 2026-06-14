@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  contents: read   # cleanup-caches calls the branches API to check existence
   actions: write
 
 jobs:
@@ -37,3 +38,27 @@ jobs:
               | .[] | select(.createdAt < $cutoff) | .databaseId
             ' \
           | xargs -r -I{} gh run delete {} --repo "${{ github.repository }}"
+
+  cleanup-caches:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Delete caches from merged/deleted branches
+        run: |
+          echo "=== Cleaning caches from non-existent branches ==="
+          gh cache list --repo "${{ github.repository }}" --json id,ref,key --limit 200 \
+          | jq -r '.[] | "\(.id)\t\(.ref)\t\(.key)"' \
+          | while IFS=$'\t' read -r id ref key; do
+              branch="${ref#refs/heads/}"
+              # Keep caches for main and tags.
+              if [ "$branch" = "main" ] || [[ "$ref" == refs/tags/* ]]; then
+                continue
+              fi
+              # Delete the cache if its source branch no longer exists.
+              if ! gh api "repos/${{ github.repository }}/branches/${branch}" --silent 2>/dev/null; then
+                echo "Deleting cache ${key} (branch ${branch} no longer exists)"
+                gh cache delete "$id" --repo "${{ github.repository }}" 2>/dev/null || true
+              fi
+            done

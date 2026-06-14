@@ -37,6 +37,14 @@ public sealed class ProductsApiFixture : IAsyncInitializer, IAsyncDisposable
 
         Factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(b => b.UseEnvironment("Test"));
+
+        // Force the host to build and run Program.cs's EnsureCreatedAsync()
+        // exactly once here — single-threaded, before any test runs. Without
+        // this warm-up the test methods (which TUnit runs in parallel) each
+        // trigger the lazy first CreateClient(), starting the host concurrently
+        // and racing on schema creation (Postgres 42P07 "relation already
+        // exists"). One warm-up client serializes that to a single CREATE.
+        using var warmup = Factory.CreateClient();
     }
 
     public async ValueTask DisposeAsync()

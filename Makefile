@@ -43,20 +43,24 @@ help:
 
 #deps: @ Verify required tools (auto-installs mise locally; idempotent)
 deps:
-	@# Bootstrap mise locally so contributors converge on the pinned toolchain
-	@# from .mise.toml. CI provides mise via jdx/mise-action, so only the
-	@# local curl-install is guarded to non-CI.
-	@if [ -z "$$CI" ] && ! command -v mise >/dev/null 2>&1; then \
+	@# Ensure mise is present. Real CI provides it via jdx/mise-action; a fresh
+	@# local checkout, or an `act` run (where mise-action is skipped because it
+	@# can't download mise inside the act container), installs it here. The
+	@# interactive-local path stops to prompt for shell activation; CI/act
+	@# continues (the shims dir is already on PATH, exported above).
+	@if ! command -v mise >/dev/null 2>&1; then \
 		echo "Installing mise (no root required, installs to ~/.local/bin)..."; \
 		curl -fsSL https://mise.run | sh; \
-		echo ""; \
-		echo "mise installed. Activate it in your shell, then re-run 'make deps':"; \
-		echo '  bash: echo '\''eval "$$(~/.local/bin/mise activate bash)"'\'' >> ~/.bashrc'; \
-		echo '  zsh:  echo '\''eval "$$(~/.local/bin/mise activate zsh)"'\''  >> ~/.zshrc'; \
-		exit 0; \
+		if [ -z "$$CI" ]; then \
+			echo ""; \
+			echo "mise installed. Activate it in your shell, then re-run 'make deps':"; \
+			echo '  bash: echo '\''eval "$$(~/.local/bin/mise activate bash)"'\'' >> ~/.bashrc'; \
+			echo '  zsh:  echo '\''eval "$$(~/.local/bin/mise activate zsh)"'\''  >> ~/.zshrc'; \
+			exit 0; \
+		fi; \
 	fi
-	@# Install the pinned toolchain. Runs in CI too (mise present via
-	@# jdx/mise-action) so every tool the recipes call is available.
+	@# Install the pinned toolchain (local + CI/act) so every tool the recipes
+	@# call is available via the mise shims on PATH.
 	@if command -v mise >/dev/null 2>&1; then \
 		mise install --yes >/dev/null; \
 	fi

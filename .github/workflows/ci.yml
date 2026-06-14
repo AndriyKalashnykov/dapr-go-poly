@@ -59,6 +59,7 @@ jobs:
       # `make` targets call (golangci-lint, hadolint, trivy, gitleaks,
       # actionlint, shellcheck, govulncheck). Single source of truth.
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
           install: true
           cache: true
@@ -93,6 +94,7 @@ jobs:
       # `make` targets call (golangci-lint, hadolint, trivy, gitleaks,
       # actionlint, shellcheck, govulncheck). Single source of truth.
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
           install: true
           cache: true
@@ -127,6 +129,7 @@ jobs:
       # `make` targets call (golangci-lint, hadolint, trivy, gitleaks,
       # actionlint, shellcheck, govulncheck). Single source of truth.
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
           install: true
           cache: true
@@ -165,6 +168,7 @@ jobs:
       # `make` targets call (golangci-lint, hadolint, trivy, gitleaks,
       # actionlint, shellcheck, govulncheck). Single source of truth.
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
           install: true
           cache: true
@@ -228,6 +232,7 @@ jobs:
       # mise installs Go (1.26.4) — `make image-build` compiles the Go service
       # binaries before building images.
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        if: ${{ !env.ACT }}   # act can't download mise in-container; make deps installs it instead
         with:
           install: true
           cache: true

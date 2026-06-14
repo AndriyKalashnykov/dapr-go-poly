@@ -18,7 +18,7 @@ A polyglot microservices project using [Dapr](https://dapr.io/) with Go and .NET
 | Persistence | Postgres 17 (per-service schema), RabbitMQ 3 (order consumer) | Matches the docker-compose local-dev topology one-to-one with production intent |
 | Static analysis | `golangci-lint` (gosec/gocritic/errorlint/bodyclose/noctx), `dotnet format --verify`, `govulncheck`, `hadolint`, `trivy fs`, `gitleaks`, `actionlint` | Multi-language gate bundled behind `make static-check`; catches lint, CVEs, secrets, Dockerfile issues, and workflow drift |
 | CI | GitHub Actions (`static-check` → `build`/`test`/`integration-test` → `e2e` → `docker` on tag) | Composite `static-check` keeps quality gates in one target; `ci-pass` aggregator simplifies branch protection |
-| Local CI | [act](https://github.com/nektos/act) `0.2.87` | Reproduce CI locally; pinned via Renovate `customManagers` |
+| Local CI | [act](https://github.com/nektos/act) `0.2.87` | Reproduce CI locally; pinned in `.mise.toml` |
 | Dependency updates | Renovate (platform automerge) | Single `customManagers` regex tracks every Makefile `# renovate:` comment — no per-tool config drift |
 
 ## Quick Start
@@ -50,12 +50,10 @@ make compose-up        # bring up full stack (postgres + rabbitmq + services + D
 | [.NET SDK](https://dotnet.microsoft.com/download) | 10.0+ | .NET services (order-service, product-service) |
 | [Docker](https://www.docker.com/) | latest | Container builds and Compose orchestration |
 | [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/) | 1.17.1 | Local Dapr runtime (optional) |
-| [act](https://github.com/nektos/act) | 0.2.87 | Run GitHub Actions locally (installed by `make deps-act`) |
-| [hadolint](https://github.com/hadolint/hadolint) | 2.14.0 | Dockerfile linter (installed by `make deps-hadolint`) |
-| [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) | 1.1.4 | Go vulnerability scanner (installed by `make deps-govulncheck`) |
-| [mise](https://mise.jdx.dev/) | latest | Cross-language version manager (installed by `make deps-mise`; used by `renovate-bootstrap`) |
-| [KinD](https://kind.sigs.k8s.io/) | 0.31.0 | Kubernetes-in-Docker for `make e2e-kind` (optional; installed by `make deps-kind`) |
+| [mise](https://mise.jdx.dev/) | latest | Version manager — installs the CLI toolchain pinned in `.mise.toml` (`make deps` / `make deps-mise`) |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | matching KinD node image | Required by `make e2e-kind` (optional) |
+
+The CLI toolchain — **act, hadolint, govulncheck, golangci-lint, trivy, gitleaks, actionlint, shellcheck, kind** (and `dapr`) — is pinned in [`.mise.toml`](.mise.toml) and installed by `make deps` (locally) / `jdx/mise-action` (CI). No per-tool install targets to maintain.
 
 Install all required dependencies:
 
@@ -137,7 +135,6 @@ Run `make help` to see all available targets.
 
 | Target | Description |
 |--------|-------------|
-| `make deps-kind` | Install [KinD](https://kind.sigs.k8s.io/) (user-local) |
 | `make kind-up` | Create a KinD cluster and install Dapr (cloud-provider-kind for LoadBalancer IPs) |
 | `make kind-down` | Tear down the KinD cluster |
 | `make e2e-kind` | K8s e2e scaffolding; see [`e2e/k8s/README.md`](e2e/k8s/README.md) for the manifest TODO list |
@@ -154,11 +151,8 @@ Run `make help` to see all available targets.
 | Target | Description |
 |--------|-------------|
 | `make help` | List available targets (default) |
-| `make deps` | Verify required tools (idempotent) |
-| `make deps-act` | Install act for local CI (user-local, idempotent) |
-| `make deps-hadolint` | Install hadolint for Dockerfile linting (user-local) |
-| `make deps-govulncheck` | Install govulncheck for Go vulnerability scanning |
-| `make deps-mise` | Install mise (user-local, no root required) |
+| `make deps` | Install the toolchain from `.mise.toml` (idempotent) |
+| `make deps-mise` | Install mise itself (user-local, no root required) |
 | `make deps-prune` | Remove unused and redundant dependencies |
 | `make deps-prune-check` | Verify no prunable dependencies (CI gate) |
 | `make release` | Create and push a new tag |

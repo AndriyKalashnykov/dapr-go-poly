@@ -19,9 +19,21 @@ jobs:
     steps:
       - name: Delete old workflow runs
         run: |
-          CUTOFF=$(date -u -d "$RETAIN_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
-          # shellcheck disable=SC2086  # KEEP_MINIMUM is a bare integer by design (jq slice index, not a string)
+          CUTOFF=$(date -u -d "${RETAIN_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)
+          # Retain the newest KEEP_MINIMUM runs PER WORKFLOW, then delete any
+          # remaining run older than CUTOFF. A single GLOBAL minimum (the prior
+          # behavior) purges every run of a low-frequency workflow: on a quiet
+          # repo the newest runs are all from THIS weekly cleanup, so the CI
+          # workflow's runs get fully deleted — which flips CI to GitHub
+          # state=deleted, removing it from the Actions tab and from required
+          # status checks. Grouping by workflowName before slicing keeps each
+          # workflow's newest KEEP_MINIMUM runs and prevents that deregistration.
           gh run list --repo "${{ github.repository }}" \
-            --json databaseId,createdAt --limit 200 \
-            --jq "sort_by(.createdAt) | reverse | .[$KEEP_MINIMUM:] | .[] | select(.createdAt < \"$CUTOFF\") | .databaseId" \
+            --json databaseId,createdAt,workflowName --limit 300 \
+          | jq -r --arg cutoff "$CUTOFF" --argjson keep "$KEEP_MINIMUM" '
+              group_by(.workflowName)
+              | map(sort_by(.createdAt) | reverse | .[$keep:])
+              | add // []
+              | .[] | select(.createdAt < $cutoff) | .databaseId
+            ' \
           | xargs -r -I{} gh run delete {} --repo "${{ github.repository }}"

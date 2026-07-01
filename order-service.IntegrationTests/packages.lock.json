@@ -460,8 +460,8 @@
       },
       "Microsoft.OpenApi": {
         "type": "Transitive",
-        "resolved": "3.5.2",
-        "contentHash": "AaNCVaa5lH1p+zkYySMYfsig1+UKZykqW8UPcEg60z+xch7wqAXAtBeLn9JZpf52zEaalcPa7SSA++Os53hBiw=="
+        "resolved": "3.5.4",
+        "contentHash": "Dhiio8mc5aLT8ujQfSP6iBdy4UDdkf3iGl1S7W2XtiAfsPZghkHydnAqivtdPvMB3JcgKVzwkLrq2BW5Lb5uxg=="
       },
       "Microsoft.Testing.Extensions.CodeCoverage": {
         "type": "Transitive",
@@ -650,7 +650,7 @@
       "order-service": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.OpenApi": "[3.5.2, )",
+          "Microsoft.OpenApi": "[3.5.4, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.1, )",
           "RabbitMQ.Client": "[7.2.1, )",
           "Swashbuckle.AspNetCore": "[10.1.7, )"
